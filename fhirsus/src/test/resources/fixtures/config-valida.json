@@ -1,0 +1,19 @@
+{
+  "id": "cfg-demo-001",
+  "mapeamentos": [
+    {
+      "recurso": "Patient",
+      "regrasToFHIR": [
+        { "caminhoOrigem": "paciente.nome", "caminhoDestino": "Patient.name.text", "tipoConversao": "DIRETA", "obrigatorio": true },
+        { "caminhoOrigem": "paciente.sexo", "caminhoDestino": "Patient.gender", "tipoConversao": "DOMINIO", "parametroConversao": "sexo" },
+        { "caminhoDestino": "Patient.active", "tipoConversao": "CONSTANTE", "parametroConversao": "true" }
+      ],
+      "regrasToLegado": [
+        { "caminhoOrigem": "Patient.name.text", "caminhoDestino": "paciente.nome", "tipoConversao": "DIRETA" }
+      ]
+    }
+  ],
+  "dominiosValores": [
+    { "nome": "sexo", "equivalencia": { "M": "male", "F": "female" } }
+  ]
+}
