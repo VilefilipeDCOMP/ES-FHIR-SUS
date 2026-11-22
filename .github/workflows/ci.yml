@@ -1,0 +1,141 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  structure:
+    name: Estrutura do repositório
+    runs-on: ubuntu-24.04
+    outputs:
+      backends: ${{ steps.modules.outputs.backends }}
+      frontend_scripts: ${{ steps.frontend.outputs.scripts }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Verificar estrutura e localizar módulos
+        id: modules
+        run: |
+          git ls-tree --name-only HEAD
+
+          backends=()
+          for module in fhirsus backend; do
+            if [[ -f "$module/pom.xml" ]]; then
+              backends+=("$module")
+              echo "Backend ($module): POM encontrado."
+            else
+              echo "::notice::Backend ($module): job ignorado. $module/pom.xml ausente, módulo não testado."
+            fi
+          done
+          backend_matrix=$(jq -cn --args '$ARGS.positional' "${backends[@]}")
+          echo "backends=$backend_matrix" >> "$GITHUB_OUTPUT"
+
+      - name: Localizar scripts do frontend
+        id: frontend
+        run: |
+          if [[ ! -f frontend/package.json ]]; then
+            echo "::notice::Frontend: job ignorado. frontend/package.json ausente, módulo não testado."
+            echo 'scripts=[]' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          scripts=$(jq -ces '
+            if length == 1 and (.[0] | type) == "object" then .[0].scripts
+            else error("package.json deve conter um objeto JSON")
+            end
+            | . as $scripts
+            | ["lint", "test", "build"]
+            | map(select($scripts[.] | strings | test("\\S")))
+          ' frontend/package.json)
+          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
+
+          if [[ "$scripts" == '[]' ]]; then
+            echo "::notice::Frontend: job ignorado. Módulo não testado, sem scripts lint, test ou build."
+          else
+            for script in lint test build; do
+              if [[ "$scripts" != *\""$script"\"* ]]; then
+                echo "::notice::Frontend: etapa $script ignorada. Script ausente em package.json."
+              fi
+            done
+          fi
+
+  backend:
+    name: Backend (${{ matrix.module }})
+    needs: structure
+    if: needs.structure.outputs.backends != '[]'
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.structure.outputs.backends) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Compilar e testar com Maven
+        working-directory: ${{ matrix.module }}
+        run: mvn --batch-mode --no-transfer-progress verify
+
+  frontend:
+    name: Frontend
+    needs: structure
+    if: needs.structure.outputs.frontend_scripts != '[]'
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Instalar dependências com npm ci
+        run: |
+          lockfile=package-lock.json
+          if [[ -f npm-shrinkwrap.json ]]; then
+            lockfile=npm-shrinkwrap.json
+          fi
+          if [[ ! -f "$lockfile" ]] || ! git ls-files --error-unmatch -- "$lockfile" >/dev/null 2>&1; then
+            echo "::error::O frontend precisa de um package-lock.json ou npm-shrinkwrap.json versionado."
+            exit 1
+          fi
+          npm ci
+
+      - name: Lint
+        if: contains(fromJSON(needs.structure.outputs.frontend_scripts), 'lint')
+        run: npm run lint
+
+      - name: Testes
+        if: contains(fromJSON(needs.structure.outputs.frontend_scripts), 'test')
+        env:
+          CI: 'true'
+        timeout-minutes: 10
+        run: npm run test < /dev/null
+
+      - name: Build
+        if: contains(fromJSON(needs.structure.outputs.frontend_scripts), 'build')
+        run: npm run build
