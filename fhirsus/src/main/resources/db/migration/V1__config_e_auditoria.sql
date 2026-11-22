@@ -9,10 +9,8 @@ CREATE TABLE config_versao (
     criado_por  VARCHAR(100) NOT NULL
 );
 
--- No máximo uma configuração ativa por vez.
 CREATE UNIQUE INDEX ux_config_versao_ativa ON config_versao (ativa) WHERE ativa;
 
--- RegistroAuditoriaMapeamento (diagrama de classes)
 CREATE TABLE auditoria_mapeamento (
     id              BIGSERIAL PRIMARY KEY,
     datahora        TIMESTAMP    NOT NULL,

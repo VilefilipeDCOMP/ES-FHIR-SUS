@@ -11,7 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-/** API de configuração. Erros aqui são JSON simples (ADR-06); o fluxo clínico usa OperationOutcome. */
 @RestController
 @RequestMapping("/api")
 public class ConfigController {
@@ -24,7 +23,6 @@ public class ConfigController {
         this.auditoriaRepository = auditoriaRepository;
     }
 
-    /** Corpo cru em JSON (o Content-Type não é exigido). */
     @PostMapping(value = "/config", consumes = "*/*")
     public ResponseEntity<Map<String, Object>> salvar(@RequestBody String corpo) {
         ConfigVersaoEntity v = service.salvar(corpo);

@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Validação semântica da configuração. Retorna a lista de erros (vazia = válida). */
 public class ConfigValidator {
 
     public static final Set<String> RECURSOS = Set.of(
@@ -93,7 +92,6 @@ public class ConfigValidator {
             } else if (!destinos.add(r.caminhoDestino())) {
                 erros.add(new ErroValidacao(rp + ".caminhoDestino", "destino duplicado no mesmo sentido: " + r.caminhoDestino()));
             }
-            // Caminho do lado FHIR deve começar pelo nome do recurso (validação só por prefixo: ver TD-09)
             String caminhoFhir = paraFhir ? r.caminhoDestino() : r.caminhoOrigem();
             String campoFhir = paraFhir ? ".caminhoDestino" : ".caminhoOrigem";
             if (!vazio(caminhoFhir) && !caminhoFhir.startsWith(recurso + ".")) {

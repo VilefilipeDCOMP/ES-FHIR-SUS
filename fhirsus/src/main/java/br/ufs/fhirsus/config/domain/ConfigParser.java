@@ -4,15 +4,10 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Lê a configuração em JSON (ADR-04: configuração externa em JSON; YAML descartado).
- * JSON malformado, campo desconhecido ou valor de enum inválido viram ConfigSintaxeException.
- */
 public class ConfigParser {
 
     private static final int LIMITE_CARACTERES = 1_000_000;
 
-    // Jackson 3 (Spring Boot 4): mapper imutável, construído via builder.
     private final JsonMapper mapper = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
             .build();

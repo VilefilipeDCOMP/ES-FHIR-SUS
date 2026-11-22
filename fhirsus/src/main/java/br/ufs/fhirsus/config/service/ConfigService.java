@@ -6,9 +6,12 @@ import br.ufs.fhirsus.config.repository.ConfigVersaoRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@RequiredArgsConstructor
 @Service
 public class ConfigService {
 
@@ -17,12 +20,7 @@ public class ConfigService {
     private final ConfigVersaoRepository repository;
     private final AuditoriaService auditoria;
 
-    public ConfigService(ConfigVersaoRepository repository, AuditoriaService auditoria) {
-        this.repository = repository;
-        this.auditoria = auditoria;
-    }
 
-    /** Só valida (não salva). Lança ConfigSintaxeException ou ConfigInvalidaException. */
     public MapeamentoConfig validar(String conteudo) {
         MapeamentoConfig config = parser.parse(conteudo);
         List<ErroValidacao> erros = validator.validar(config);
@@ -32,11 +30,6 @@ public class ConfigService {
         return config;
     }
 
-    /**
-     * Valida, salva como nova versão ativa e audita (versão atual + anterior), tudo na mesma transação.
-     * Config inválida: exceção ANTES de qualquer escrita (a ativa não muda).
-     * Falha na auditoria: rollback (a ativa anterior permanece).
-     */
     @Transactional
     public ConfigVersaoEntity salvar(String conteudo) {
         MapeamentoConfig config = validar(conteudo);

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.doThrow;
 
+import org.springframework.test.util.AopTestUtils;
 import br.ufs.fhirsus.config.domain.*;
 import br.ufs.fhirsus.config.repository.AuditoriaMapeamentoRepository;
 import br.ufs.fhirsus.config.repository.ConfigVersaoRepository;
@@ -26,7 +27,6 @@ class ConfigServiceTest {
 
     @BeforeEach
     void limpar() {
-        org.mockito.Mockito.reset(auditoriaService);
         auditoriaRepo.deleteAll();
         configRepo.deleteAll();
     }
@@ -74,8 +74,9 @@ class ConfigServiceTest {
     void falhaNaAuditoriaFazRollbackETudo() {
         service.salvar(Fixtures.ler("config-valida.json"));
 
+        var alvo = AopTestUtils.getUltimateTargetObject(auditoriaService);
         doThrow(new IllegalStateException("falha simulada na auditoria"))
-                .when(auditoriaService).registrar(anyInt(), any());
+                .when((AuditoriaService) alvo).registrar(anyInt(), any());
 
         assertThrows(IllegalStateException.class,
                 () -> service.salvar(Fixtures.ler("config-valida.json")));

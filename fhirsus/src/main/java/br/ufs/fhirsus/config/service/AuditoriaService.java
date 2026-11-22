@@ -8,10 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Registra RegistroAuditoriaMapeamento. MANDATORY: só roda dentro de uma transação já aberta,
- * de modo que uma falha aqui derruba a operação principal (RF007: salvar + auditar atomicamente).
- */
 @Service
 public class AuditoriaService {
 

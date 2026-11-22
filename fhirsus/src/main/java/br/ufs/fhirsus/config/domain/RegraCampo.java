@@ -1,6 +1,5 @@
 package br.ufs.fhirsus.config.domain;
 
-/** Regra campo a campo (diagrama: RegraCampo). */
 public record RegraCampo(
         String caminhoOrigem,
         String caminhoDestino,
