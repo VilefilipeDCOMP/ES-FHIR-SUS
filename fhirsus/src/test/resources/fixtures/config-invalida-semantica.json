@@ -1,0 +1,13 @@
+{
+  "mapeamentos": [
+    { "recurso": "Paciente",
+      "regrasToFHIR": [ { "caminhoOrigem": "a", "caminhoDestino": "b", "tipoConversao": "DIRETA" } ] },
+    { "recurso": "Observation",
+      "regrasToFHIR": [
+        { "caminhoOrigem": "x", "caminhoDestino": "Patient.gender", "tipoConversao": "DIRETA" },
+        { "caminhoOrigem": "y", "caminhoDestino": "Observation.value", "tipoConversao": "DOMINIO", "parametroConversao": "naoExiste" },
+        { "caminhoOrigem": "z", "caminhoDestino": "Observation.value", "tipoConversao": "CONSTANTE" }
+      ] },
+    { "recurso": "Specimen" }
+  ]
+}
