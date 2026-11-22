@@ -1,12 +1,11 @@
 {
   "mapeamentos": [
     { "recurso": "Paciente",
-      "regrasToFHIR": [ { "caminhoOrigem": "a", "caminhoDestino": "b", "tipoConversao": "DIRETA" } ] },
+      "toFHIR": [ { "caminhoOrigem": "$.a", "caminhoDestino": "b", "tipoConversao": "DIRETA", "parametroConversao": null, "obrigatorio": true } ] },
     { "recurso": "Observation",
-      "regrasToFHIR": [
-        { "caminhoOrigem": "x", "caminhoDestino": "Patient.gender", "tipoConversao": "DIRETA" },
-        { "caminhoOrigem": "y", "caminhoDestino": "Observation.value", "tipoConversao": "DOMINIO", "parametroConversao": "naoExiste" },
-        { "caminhoOrigem": "z", "caminhoDestino": "Observation.value", "tipoConversao": "CONSTANTE" }
+      "toFHIR": [
+        { "caminhoOrigem": "$.x", "caminhoDestino": "valor", "tipoConversao": "DOMINIO", "parametroConversao": "naoExiste" },
+        { "caminhoDestino": "valor", "tipoConversao": "CONSTANTE", "obrigatorio": true }
       ] },
     { "recurso": "Specimen" }
   ]

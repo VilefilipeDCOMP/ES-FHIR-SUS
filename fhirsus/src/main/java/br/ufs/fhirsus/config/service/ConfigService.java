@@ -1,5 +1,6 @@
 package br.ufs.fhirsus.config.service;
 
+import br.ufs.fhirsus.map.MapeamentoConfig;
 import br.ufs.fhirsus.config.domain.*;
 import br.ufs.fhirsus.config.entity.ConfigVersaoEntity;
 import br.ufs.fhirsus.config.repository.ConfigVersaoRepository;
@@ -44,7 +45,7 @@ public class ConfigService {
 
         int versao = repository.maiorVersao() + 1;
         ConfigVersaoEntity nova = repository.save(new ConfigVersaoEntity(
-                versao, config.id(), conteudo, true, true, LocalDateTime.now(), auditoria.responsavelAtual()));
+                versao, conteudo, true, true, LocalDateTime.now(), auditoria.responsavelAtual()));
 
         auditoria.registrar(versao, versaoAnterior);
         return nova;
@@ -58,5 +59,10 @@ public class ConfigService {
     @Transactional(readOnly = true)
     public List<ConfigVersaoEntity> versoes() {
         return repository.findAllByOrderByVersaoDesc();
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<MapeamentoConfig> ativaComoModelo() {
+        return repository.findByAtivaTrue().map(v -> parser.parse(v.getConteudo()));
     }
 }

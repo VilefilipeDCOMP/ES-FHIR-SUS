@@ -50,7 +50,6 @@ class ConfigServiceTest {
         assertEquals(1, auditorias.get(0).getVersaoAtual());
         assertNull(auditorias.get(0).getVersaoAnterior());
         assertTrue(v.isValidada());
-        assertEquals("cfg-demo-001", v.getConfigId());
     }
 
     @Test

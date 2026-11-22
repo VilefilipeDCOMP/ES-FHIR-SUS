@@ -1,13 +1,13 @@
 CREATE TABLE config_versao (
     id          BIGSERIAL PRIMARY KEY,
     versao      INTEGER      NOT NULL UNIQUE,
-    config_id   VARCHAR(100),
     conteudo    TEXT         NOT NULL,
     ativa       BOOLEAN      NOT NULL,
     validada    BOOLEAN      NOT NULL,
     criado_em   TIMESTAMP    NOT NULL,
     criado_por  VARCHAR(100) NOT NULL
 );
+--apaguei config id aqui, não em um V2, pq ninguem subiu esse migration para o banco até o momento
 
 CREATE UNIQUE INDEX ux_config_versao_ativa ON config_versao (ativa) WHERE ativa;
 

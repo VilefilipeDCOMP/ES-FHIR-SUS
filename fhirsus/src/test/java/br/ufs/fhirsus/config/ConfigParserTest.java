@@ -2,8 +2,11 @@ package br.ufs.fhirsus.config;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import br.ufs.fhirsus.config.domain.*;
+
+import br.ufs.fhirsus.map.TipoConversao;
 import org.junit.jupiter.api.Test;
+import br.ufs.fhirsus.config.domain.ConfigParser;
+import br.ufs.fhirsus.config.domain.ConfigSintaxeException;
 
 class ConfigParserTest {
     private final ConfigParser parser = new ConfigParser();
@@ -11,11 +14,10 @@ class ConfigParserTest {
     @Test
     void jsonValidoGeraOModelo() {
         var c = parser.parse(Fixtures.ler("config-valida.json"));
-        assertEquals("cfg-demo-001", c.id());
-        assertEquals(3, c.mapeamentos().get(0).regrasToFHIR().size());
-        assertEquals(1, c.mapeamentos().get(0).regrasToLegado().size());
-        assertEquals(TipoConversao.DOMINIO, c.mapeamentos().get(0).regrasToFHIR().get(1).tipoConversao());
-        assertEquals("female", c.dominiosValores().get(0).equivalencia().get("F"));
+        assertEquals(3, c.mapeamentos().get(0).toFHIR().size());
+        assertEquals(1, c.mapeamentos().get(0).toLegado().size());
+        assertEquals(TipoConversao.DOMINIO, c.mapeamentos().get(0).toFHIR().get(1).getTipoConversao());
+        assertEquals("female", c.dominios().get(0).equivalencia().get("F"));
     }
 
     @Test
@@ -41,4 +43,9 @@ class ConfigParserTest {
         assertThrows(ConfigSintaxeException.class, () -> parser.parse("   "));
     }
 
+    @Test
+    void chaveRepetidaEErroDeSintaxe() {
+        assertThrows(ConfigSintaxeException.class,
+                () -> parser.parse("{\"mapeamentos\":[],\"mapeamentos\":[]}"));
+    }
 }

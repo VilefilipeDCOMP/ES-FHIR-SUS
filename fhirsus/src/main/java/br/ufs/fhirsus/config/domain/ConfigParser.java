@@ -3,6 +3,8 @@ package br.ufs.fhirsus.config.domain;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
+import br.ufs.fhirsus.map.MapeamentoConfig;
+import tools.jackson.core.StreamReadFeature;
 
 public class ConfigParser {
 
@@ -10,6 +12,7 @@ public class ConfigParser {
 
     private final JsonMapper mapper = JsonMapper.builder()
             .enable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+            .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .build();
 
     public MapeamentoConfig parse(String conteudo) {
