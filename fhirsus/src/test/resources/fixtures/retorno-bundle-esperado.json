@@ -1,0 +1,59 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:relatorio-laudo-01",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "https://clinica.example/codigos/laudos",
+              "code": "LAUDO-LAB",
+              "display": "Relatorio Laboratorial Sintetico P3"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/PAC-001"
+        },
+        "basedOn": [
+          {
+            "reference": "ServiceRequest/PED-001"
+          }
+        ],
+        "result": [
+          {
+            "reference": "urn:uuid:observacao-resultado-01"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observacao-resultado-01",
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "https://clinica.example/codigos/exames",
+              "code": "EXAME-001"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "Patient/PAC-001"
+        },
+        "valueString": "99 mg/dL",
+        "note": [
+          {
+            "text": "Resultado dentro da faixa de referência sintética do P3"
+          }
+        ]
+      }
+    }
+  ]
+}

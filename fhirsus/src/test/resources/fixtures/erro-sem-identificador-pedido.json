@@ -1,0 +1,12 @@
+{
+  "resourceType": "ServiceRequest",
+  "status": "active",
+  "intent": "order",
+  "code": {
+    "coding": [
+      {
+        "code": "HEMOGRAMA-01"
+      }
+    ]
+  }
+}

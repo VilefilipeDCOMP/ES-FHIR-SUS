@@ -1,0 +1,13 @@
+{
+  "status_execucao": "CONCLUIDO",
+  "numero_protocolo_lab": "LAB-1732308901234",
+  "codigo_pedido": "PED-001",
+  "laudo_itens": [
+    {
+      "codigo_analise": "EXAME-001",
+      "resultado_valor": "99 mg/dL",
+      "status_analise": "FINAL",
+      "observacao_tecnica": "Resultado dentro da faixa de referência sintética do P3"
+    }
+  ]
+}

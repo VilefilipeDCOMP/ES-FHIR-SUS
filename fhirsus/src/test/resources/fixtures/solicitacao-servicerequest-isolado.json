@@ -1,0 +1,12 @@
+{
+  "resourceType": "ServiceRequest",
+  "id": "PED-002",
+  "code": {
+    "coding": [
+      {
+        "system": "https://clinica.example/codigos/exames",
+        "code": "GLICEMIA-01"
+      }
+    ]
+  }
+}

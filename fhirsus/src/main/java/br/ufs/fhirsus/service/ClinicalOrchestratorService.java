@@ -4,6 +4,8 @@ import br.ufs.fhirsus.client.LabLegacyClient;
 import br.ufs.fhirsus.engine.ConversionEngine;
 import br.ufs.fhirsus.engine.SentidoConversao;
 import br.ufs.fhirsus.validator.ServiceRequestValidator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -24,6 +26,8 @@ import java.util.UUID;
  */
 @Service
 public class ClinicalOrchestratorService {
+
+    private static final Logger log = LoggerFactory.getLogger(ClinicalOrchestratorService.class);
 
     private final ServiceRequestValidator validator;
     private final ConversionEngine conversionEngine;
@@ -46,8 +50,15 @@ public class ClinicalOrchestratorService {
     }
 
     public ObjectNode processarFluxoCompleto(JsonNode payload, boolean simularFalhaRemota, long delaySimuladoMs) {
+        log.info("================================================================================");
+        log.info(">>> [PIPELINE PIPES & FILTERS] INICIANDO PROCESSAMENTO DA REQUISICAO");
+        log.info("================================================================================");
+
         // Filtro 1: Validação estrutural e semântica
         ServiceRequestValidator.ValidClinicalInput input = validator.validar(payload);
+        log.info("[FILTRO 1 - VALIDACAO FHIR]: Entrada validada com sucesso!");
+        log.info("  -> Pedido: {} | Exame: {} | Paciente: {}",
+                input.numeroPedido(), input.codigoExame(), input.pacienteCodigo() != null ? input.pacienteCodigo() : "(Nenhum)");
 
         // Filtro 2: Conversão FHIR -> Legado
         ObjectNode pedidoLegado = conversionEngine.converter(
@@ -55,12 +66,31 @@ public class ClinicalOrchestratorService {
                 "ServiceRequest",
                 SentidoConversao.TO_LEGADO
         );
+        log.info("[FILTRO 2 - CONVERSAO FHIR -> LEGADO (CT-02)]: Payload gerado:");
+        log.info("  -> {}", pedidoLegado);
 
         // Filtro 3: Envio HTTP ao laboratório com timeout configurável
+        log.info("[FILTRO 3 - DESPACHO HTTP AO LABORATORIO (CT-01 / RF016)]: Enviando via POST...");
         JsonNode respostaLab = labClient.enviarPedidoLegado(pedidoLegado, simularFalhaRemota, delaySimuladoMs);
+        log.info("[FILTRO 3 - RESPOSTA RECEBIDA DO LAB]:");
+        log.info("  -> Status: {} | Protocolo: {}",
+                respostaLab.path("status_execucao").asText(),
+                respostaLab.path("numero_protocolo_lab").asText());
 
-        // Filtro 4 & 5: Conversão Legado -> FHIR e Composição do Bundle final
-        return montarBundleLaudoFinal(input, respostaLab);
+        // Filtros 4 & 5: Conversão Legado -> FHIR e Composição do Bundle final
+        log.info("[FILTRO 4 - CONVERSAO LEGADO -> FHIR (CT-02)]: Transformando itens em Observation e DiagnosticReport");
+        ObjectNode bundleFinal = montarBundleLaudoFinal(input, respostaLab);
+
+        log.info("[FILTRO 5 - MONTAGEM E CORRELACAO DO BUNDLE FHIR R4 (UC-01)]:");
+        log.info("  -> Bundle ID: {} | Tipo: {} | Total Entradas: {}",
+                bundleFinal.path("id").asText(),
+                bundleFinal.path("type").asText(),
+                bundleFinal.path("entry").size());
+        log.info("================================================================================");
+        log.info(">>> [PIPELINE CONCLUIDO COM SUCESSO - DEVOLVENDO HTTP 200 A CLINICA]");
+        log.info("================================================================================");
+
+        return bundleFinal;
     }
 
     private ObjectNode montarBundleLaudoFinal(ServiceRequestValidator.ValidClinicalInput input, JsonNode respostaLab) {
@@ -72,9 +102,8 @@ public class ClinicalOrchestratorService {
 
         ArrayNode entries = bundle.putArray("entry");
 
-        // Identificadores únicos para correlação interna (HL7 FHIR R4)
+        // Identificador único do laudo (DiagnosticReport)
         String uuidReport = "urn:uuid:" + UUID.randomUUID();
-        String uuidObs = "urn:uuid:" + UUID.randomUUID();
 
         // 1. Converte e enriquece DiagnosticReport
         ObjectNode diagnosticReport = conversionEngine.converter(respostaLab, "DiagnosticReport", SentidoConversao.TO_FHIR);
@@ -84,29 +113,34 @@ public class ClinicalOrchestratorService {
             subjectNode.put("reference", "Patient/" + input.pacienteCodigo());
         }
 
-        // Vincula a Observation ao DiagnosticReport (result)
-        var resultArray = diagnosticReport.putArray("result");
-        resultArray.addObject().put("reference", uuidObs);
-
-        // 2. Converte e enriquece Observation a partir dos itens do laudo
-        JsonNode laudoItens = respostaLab.path("laudo_itens");
-        JsonNode primeiroItem = laudoItens.isArray() && !laudoItens.isEmpty() ? laudoItens.get(0) : objectMapper.createObjectNode();
-        ObjectNode observation = conversionEngine.converter(primeiroItem, "Observation", SentidoConversao.TO_FHIR);
-        observation.put("id", uuidObs.replace("urn:uuid:", ""));
-        if (input.pacienteCodigo() != null) {
-            ObjectNode subjectNode = observation.putObject("subject");
-            subjectNode.put("reference", "Patient/" + input.pacienteCodigo());
-        }
+        ArrayNode resultArray = diagnosticReport.putArray("result");
 
         // Adiciona DiagnosticReport como entry[0]
         ObjectNode reportEntry = entries.addObject();
         reportEntry.put("fullUrl", uuidReport);
         reportEntry.set("resource", diagnosticReport);
 
-        // Adiciona Observation como entry[1]
-        ObjectNode obsEntry = entries.addObject();
-        obsEntry.put("fullUrl", uuidObs);
-        obsEntry.set("resource", observation);
+        // 2. Converte e enriquece todas as Observations a partir dos itens do laudo
+        JsonNode laudoItens = respostaLab.path("laudo_itens");
+        if (laudoItens.isArray() && !laudoItens.isEmpty()) {
+            for (JsonNode item : laudoItens) {
+                String uuidObs = "urn:uuid:" + UUID.randomUUID();
+                ObjectNode observation = conversionEngine.converter(item, "Observation", SentidoConversao.TO_FHIR);
+                observation.put("id", uuidObs.replace("urn:uuid:", ""));
+                if (input.pacienteCodigo() != null) {
+                    ObjectNode subjectNode = observation.putObject("subject");
+                    subjectNode.put("reference", "Patient/" + input.pacienteCodigo());
+                }
+
+                // Vincula o UUID desta Observation ao DiagnosticReport.result
+                resultArray.addObject().put("reference", uuidObs);
+
+                // Adiciona esta Observation ao Bundle
+                ObjectNode obsEntry = entries.addObject();
+                obsEntry.put("fullUrl", uuidObs);
+                obsEntry.set("resource", observation);
+            }
+        }
 
         return bundle;
     }

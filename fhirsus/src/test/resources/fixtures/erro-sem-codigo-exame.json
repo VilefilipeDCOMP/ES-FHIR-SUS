@@ -1,0 +1,6 @@
+{
+  "resourceType": "ServiceRequest",
+  "id": "PED-003",
+  "status": "active",
+  "intent": "order"
+}
