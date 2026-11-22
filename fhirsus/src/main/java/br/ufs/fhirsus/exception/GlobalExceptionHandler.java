@@ -45,6 +45,17 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
     }
 
+    @ExceptionHandler(br.ufs.fhirsus.engine.FalhaConversao.class)
+    public ResponseEntity<OperationOutcomeDto> handleFalhaConversao(br.ufs.fhirsus.engine.FalhaConversao ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                ex.getCodigo(),
+                ex.getMessage(),
+                ex.getCaminho()
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
+    }
+
     @ExceptionHandler(LabTimeoutException.class)
     public ResponseEntity<OperationOutcomeDto> handleLabTimeout(LabTimeoutException ex) {
         OperationOutcomeDto outcome = OperationOutcomeDto.of(
