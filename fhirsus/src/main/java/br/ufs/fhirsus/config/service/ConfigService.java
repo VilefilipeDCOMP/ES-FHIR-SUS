@@ -9,6 +9,7 @@ import java.util.Optional;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @RequiredArgsConstructor
@@ -20,7 +21,6 @@ public class ConfigService {
     private final ConfigVersaoRepository repository;
     private final AuditoriaService auditoria;
 
-
     public MapeamentoConfig validar(String conteudo) {
         MapeamentoConfig config = parser.parse(conteudo);
         List<ErroValidacao> erros = validator.validar(config);
@@ -30,10 +30,11 @@ public class ConfigService {
         return config;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public ConfigVersaoEntity salvar(String conteudo) {
         MapeamentoConfig config = validar(conteudo);
 
+        repository.bloquearAtivacao();
         Optional<ConfigVersaoEntity> anterior = repository.findByAtivaTrue();
         Integer versaoAnterior = anterior.map(ConfigVersaoEntity::getVersao).orElse(null);
         anterior.ifPresent(a -> {

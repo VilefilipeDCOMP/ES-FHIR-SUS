@@ -8,6 +8,9 @@ import org.springframework.data.jpa.repository.Query;
 
 public interface ConfigVersaoRepository extends JpaRepository<ConfigVersaoEntity, Long> {
 
+    @Query(value = "select id from config_ativacao where id = 1 for update", nativeQuery = true)
+    int bloquearAtivacao();
+
     Optional<ConfigVersaoEntity> findByAtivaTrue();
 
     List<ConfigVersaoEntity> findAllByOrderByVersaoDesc();
