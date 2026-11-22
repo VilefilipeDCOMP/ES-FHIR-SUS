@@ -6,6 +6,10 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
+
+import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -14,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class ValidadorFhirTest {
 
     private final ValidadorFhir validador = new ValidadorFhir();
+    private final JsonMapper jsonMapper = JsonMapper.builder().build();
 
     @Test
     void aceitaSolicitacaoSinteticaDoMotor() {
@@ -40,6 +45,36 @@ class ValidadorFhirTest {
                   "intent": "order"
                 }
                 """, "ServiceRequest");
+
+        assertFalse(resultado.isSuccessful());
+        assertTrue(resultado.getMessages().stream()
+                .anyMatch(mensagem -> mensagem.getMessage().contains("ServiceRequest.subject")), resultado::toString);
+    }
+
+    @Test
+    void aceitaBundleDeEntradaDoContrato() throws IOException {
+        ValidationResult resultado = validador.validar(bundleDoContrato().toString(), "Bundle");
+
+        assertTrue(resultado.isSuccessful(), resultado::toString);
+    }
+
+    @Test
+    void aceitaSolicitacaoDoContratoComoRecursoIsolado() throws IOException {
+        ObjectNode solicitacao = (ObjectNode) bundleDoContrato().at("/entry/0/resource");
+        ((ObjectNode) solicitacao.path("subject")).put("reference", "Patient/PAC-001");
+
+        ValidationResult resultado = validador.validar(solicitacao.toString(), "ServiceRequest");
+
+        assertTrue(resultado.isSuccessful(), resultado::toString);
+    }
+
+    @Test
+    void rejeitaBundleComSolicitacaoSemReferenciaAoPaciente() throws IOException {
+        ObjectNode bundle = bundleDoContrato();
+        ObjectNode solicitacao = (ObjectNode) bundle.at("/entry/0/resource");
+        solicitacao.remove("subject");
+
+        ValidationResult resultado = validador.validar(bundle.toString(), "Bundle");
 
         assertFalse(resultado.isSuccessful());
         assertTrue(resultado.getMessages().stream()
@@ -76,5 +111,11 @@ class ValidadorFhirTest {
     @ValueSource(strings = {" ", "{", "[]", "null", "{\"resourceType\":\"ServiceRequest\"} {}"})
     void rejeitaCorpoQueNaoRepresentaUmRecurso(String json) {
         assertFalse(validador.validar(json, "ServiceRequest").isSuccessful());
+    }
+
+    private ObjectNode bundleDoContrato() throws IOException {
+        try (var entrada = getClass().getResourceAsStream("/fixtures/bundle-entrada-ct01.json")) {
+            return (ObjectNode) jsonMapper.readTree(entrada);
+        }
     }
 }
