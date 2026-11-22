@@ -1,19 +1,18 @@
 {
-  "id": "cfg-demo-001",
   "mapeamentos": [
     {
       "recurso": "Patient",
-      "regrasToFHIR": [
-        { "caminhoOrigem": "paciente.nome", "caminhoDestino": "Patient.name.text", "tipoConversao": "DIRETA", "obrigatorio": true },
-        { "caminhoOrigem": "paciente.sexo", "caminhoDestino": "Patient.gender", "tipoConversao": "DOMINIO", "parametroConversao": "sexo" },
-        { "caminhoDestino": "Patient.active", "tipoConversao": "CONSTANTE", "parametroConversao": "true" }
+      "toFHIR": [
+        { "caminhoOrigem": "$.paciente.nome", "caminhoDestino": "name[0].text", "tipoConversao": "DIRETA", "parametroConversao": null, "obrigatorio": true },
+        { "caminhoOrigem": "$.paciente.sexo", "caminhoDestino": "gender", "tipoConversao": "DOMINIO", "parametroConversao": "sexo", "obrigatorio": false },
+        { "caminhoDestino": "active", "tipoConversao": "CONSTANTE", "parametroConversao": "true", "obrigatorio": true }
       ],
-      "regrasToLegado": [
-        { "caminhoOrigem": "Patient.name.text", "caminhoDestino": "paciente.nome", "tipoConversao": "DIRETA" }
+      "toLegado": [
+        { "caminhoOrigem": "$.name[0].text", "caminhoDestino": "paciente.nome", "tipoConversao": "DIRETA", "parametroConversao": null, "obrigatorio": true }
       ]
     }
   ],
-  "dominiosValores": [
+  "dominios": [
     { "nome": "sexo", "equivalencia": { "M": "male", "F": "female" } }
   ]
 }

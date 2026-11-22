@@ -57,7 +57,6 @@ public class ConfigController {
     private static Map<String, Object> resumo(ConfigVersaoEntity v) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("versao", v.getVersao());
-        m.put("id", v.getConfigId());
         m.put("ativa", v.isAtiva());
         m.put("validada", v.isValidada());
         m.put("criadoEm", v.getCriadoEm().toString());

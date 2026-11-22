@@ -1,6 +1,13 @@
 package br.ufs.fhirsus.config.domain;
 
+import br.ufs.fhirsus.map.DominioValores;
+import br.ufs.fhirsus.map.Mapeamento;
+import br.ufs.fhirsus.map.MapeamentoConfig;
+import br.ufs.fhirsus.map.RegraCampo;
+import br.ufs.fhirsus.map.TipoConversao;
+import br.ufs.fhirsus.map.ValidacaoCaminhos;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,96 +26,97 @@ public class ConfigValidator {
             return erros;
         }
         Set<String> dominios = validarDominios(c, erros);
-        if (c.mapeamentos() == null || c.mapeamentos().isEmpty()) {
+        if (c.mapeamentos().isEmpty()) {
             erros.add(new ErroValidacao("mapeamentos", "deve ter ao menos 1 mapeamento"));
             return erros;
         }
-        Set<String> recursosVistos = new HashSet<>();
+        Set<String> vistos = new HashSet<>();
         for (int i = 0; i < c.mapeamentos().size(); i++) {
-            validarMapeamento(c.mapeamentos().get(i), "mapeamentos[" + i + "]", recursosVistos, dominios, erros);
+            validarMapeamento(c.mapeamentos().get(i), "mapeamentos[" + i + "]", vistos, dominios, erros);
         }
         return erros;
     }
 
     private Set<String> validarDominios(MapeamentoConfig c, List<ErroValidacao> erros) {
         Set<String> nomes = new HashSet<>();
-        if (c.dominiosValores() == null) {
-            return nomes;
-        }
-        for (int i = 0; i < c.dominiosValores().size(); i++) {
-            DominioValores d = c.dominiosValores().get(i);
-            String p = "dominiosValores[" + i + "]";
-            if (d == null || vazio(d.nome())) {
+        for (int i = 0; i < c.dominios().size(); i++) {
+            DominioValores d = c.dominios().get(i);
+            String p = "dominios[" + i + "]";
+            if (vazio(d.nome())) {
                 erros.add(new ErroValidacao(p + ".nome", "obrigatório"));
                 continue;
             }
             if (!nomes.add(d.nome())) {
                 erros.add(new ErroValidacao(p + ".nome", "duplicado: " + d.nome()));
             }
-            if (d.equivalencia() == null || d.equivalencia().isEmpty()) {
+            if (d.equivalencia().isEmpty()) {
                 erros.add(new ErroValidacao(p + ".equivalencia", "deve ter ao menos 1 entrada"));
             }
         }
         return nomes;
     }
 
-    private void validarMapeamento(Mapeamento m, String p, Set<String> vistos, Set<String> dominios, List<ErroValidacao> erros) {
-        if (m == null || vazio(m.recurso()) || !RECURSOS.contains(m.recurso())) {
+    private void validarMapeamento(Mapeamento m, String p, Set<String> vistos, Set<String> dominios,
+                                   List<ErroValidacao> erros) {
+        if (vazio(m.recurso()) || !RECURSOS.contains(m.recurso())) {
             erros.add(new ErroValidacao(p + ".recurso", "deve ser um de " + new TreeSet<>(RECURSOS)));
             return;
         }
         if (!vistos.add(m.recurso())) {
             erros.add(new ErroValidacao(p + ".recurso", "recurso duplicado: " + m.recurso()));
         }
-        List<RegraCampo> toLegado = m.regrasToLegado() == null ? List.of() : m.regrasToLegado();
-        List<RegraCampo> toFhir = m.regrasToFHIR() == null ? List.of() : m.regrasToFHIR();
-        if (toLegado.isEmpty() && toFhir.isEmpty()) {
-            erros.add(new ErroValidacao(p, "deve ter ao menos 1 regra em regrasToLegado ou regrasToFHIR"));
+        if (m.toLegado().isEmpty() && m.toFHIR().isEmpty()) {
+            erros.add(new ErroValidacao(p, "deve ter ao menos 1 regra em toLegado ou toFHIR"));
             return;
         }
-        validarRegras(m.recurso(), toFhir, p + ".regrasToFHIR", true, dominios, erros);
-        validarRegras(m.recurso(), toLegado, p + ".regrasToLegado", false, dominios, erros);
+        validarRegras(m.toLegado(), p + ".toLegado", dominios, erros);
+        validarRegras(m.toFHIR(), p + ".toFHIR", dominios, erros);
     }
 
-    private void validarRegras(String recurso, List<RegraCampo> regras, String p, boolean paraFhir,
-                               Set<String> dominios, List<ErroValidacao> erros) {
-        Set<String> destinos = new HashSet<>();
+    private void validarRegras(List<RegraCampo> regras, String p, Set<String> dominios,
+                               List<ErroValidacao> erros) {
         for (int i = 0; i < regras.size(); i++) {
-            RegraCampo r = regras.get(i);
-            String rp = p + "[" + i + "]";
-            if (r == null) {
-                erros.add(new ErroValidacao(rp, "regra nula"));
-                continue;
-            }
-            TipoConversao tipo = r.tipoConversao();
-            if (tipo == null) {
-                erros.add(new ErroValidacao(rp + ".tipoConversao", "obrigatório (" + java.util.Arrays.toString(TipoConversao.values()) + ")"));
-            }
-            if (tipo != TipoConversao.CONSTANTE && vazio(r.caminhoOrigem())) {
+            validarRegra(regras.get(i), p + "[" + i + "]", dominios, erros);
+        }
+        ValidacaoCaminhos.errosDestino(regras.stream().map(RegraCampo::getCaminhoDestino).toList())
+                .forEach((i, msg) -> erros.add(new ErroValidacao(
+                        i < 0 ? p : p + "[" + i + "].caminhoDestino", msg)));
+    }
+
+    private void validarRegra(RegraCampo r, String rp, Set<String> dominios, List<ErroValidacao> erros) {
+        TipoConversao tipo = r.getTipoConversao();
+        if (tipo == null) {
+            erros.add(new ErroValidacao(rp + ".tipoConversao",
+                    "obrigatório (" + Arrays.toString(TipoConversao.values()) + ")"));
+        }
+        if (r.getObrigatorio() == null) {
+            erros.add(new ErroValidacao(rp + ".obrigatorio", "obrigatório (true ou false)"));
+        }
+        if (vazio(r.getCaminhoDestino())) {
+            erros.add(new ErroValidacao(rp + ".caminhoDestino", "obrigatório"));
+        }
+        if (tipo != TipoConversao.CONSTANTE) {
+            if (vazio(r.getCaminhoOrigem())) {
                 erros.add(new ErroValidacao(rp + ".caminhoOrigem", "obrigatório (exceto em CONSTANTE)"));
+            } else {
+                String erro = ValidacaoCaminhos.erroOrigem(r.getCaminhoOrigem());
+                if (erro != null) {
+                    erros.add(new ErroValidacao(rp + ".caminhoOrigem", erro));
+                }
             }
-            if (vazio(r.caminhoDestino())) {
-                erros.add(new ErroValidacao(rp + ".caminhoDestino", "obrigatório"));
-            } else if (!destinos.add(r.caminhoDestino())) {
-                erros.add(new ErroValidacao(rp + ".caminhoDestino", "destino duplicado no mesmo sentido: " + r.caminhoDestino()));
-            }
-            String caminhoFhir = paraFhir ? r.caminhoDestino() : r.caminhoOrigem();
-            String campoFhir = paraFhir ? ".caminhoDestino" : ".caminhoOrigem";
-            if (!vazio(caminhoFhir) && !caminhoFhir.startsWith(recurso + ".")) {
-                erros.add(new ErroValidacao(rp + campoFhir, "caminho FHIR deve começar com \"" + recurso + ".\""));
-            }
-            if (tipo != null) {
-                validarParametro(tipo, r.parametroConversao(), rp, dominios, erros);
-            }
+        }
+        if (tipo != null) {
+            validarParametro(tipo, r.getParametroConversao(), rp, dominios, erros);
         }
     }
 
-    private void validarParametro(TipoConversao tipo, String parametro, String rp, Set<String> dominios, List<ErroValidacao> erros) {
+    private void validarParametro(TipoConversao tipo, String parametro, String rp, Set<String> dominios,
+                                  List<ErroValidacao> erros) {
         String campo = rp + ".parametroConversao";
         switch (tipo) {
             case DIRETA -> {
-                if (!vazio(parametro)) {
-                    erros.add(new ErroValidacao(campo, "deve ficar vazio em DIRETA"));
+                if (parametro != null) {
+                    erros.add(new ErroValidacao(campo, "deve ser null em DIRETA"));
                 }
             }
             case DOMINIO -> {
@@ -118,11 +126,13 @@ public class ConfigValidator {
                     erros.add(new ErroValidacao(campo, "domínio inexistente: " + parametro));
                 }
             }
-            case CONSTANTE, TRANSFORMACAO, EXPRESSAO -> {
+            case CONSTANTE -> {
                 if (vazio(parametro)) {
-                    erros.add(new ErroValidacao(campo, "obrigatório em " + tipo));
+                    erros.add(new ErroValidacao(campo, "obrigatório em CONSTANTE"));
                 }
             }
+            case TRANSFORMACAO, EXPRESSAO -> erros.add(new ErroValidacao(rp + ".tipoConversao",
+                    "fora do recorte do P3: use DIRETA, DOMINIO ou CONSTANTE"));
         }
     }
 

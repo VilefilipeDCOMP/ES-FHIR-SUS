@@ -21,9 +21,6 @@ public class ConfigVersaoEntity {
     @Column(nullable = false, unique = true)
     private Integer versao;
 
-    @Column(name = "config_id", length = 100)
-    private String configId;
-
     @Column(nullable = false, columnDefinition = "TEXT")
     private String conteudo;
 
