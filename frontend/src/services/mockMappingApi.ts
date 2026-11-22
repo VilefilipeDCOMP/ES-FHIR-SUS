@@ -20,6 +20,7 @@ function lerCaminho(obj: Record<string, unknown>, caminho: string): unknown {
     if (atual == null || typeof atual !== 'object') return undefined;
     if (Array.isArray(atual)) atual = atual[0];
     if (atual == null || typeof atual !== 'object') return undefined;
+    if (!Object.prototype.hasOwnProperty.call(atual, parte)) return undefined;
     atual = (atual as Record<string, unknown>)[parte];
   }
   return atual;
@@ -187,7 +188,11 @@ export function criarMockMappingApi(configPadrao: MapeamentoConfig): MappingGate
         if (regra.regra.startsWith('TABELA:')) {
           const nomeTabela = regra.regra.slice('TABELA:'.length);
           const tab = config.tabelas.find((t) => t.nome === nomeTabela);
-          convertido = tab ? tab.equivalencia[String(bruto)] : undefined;
+          const chave = String(bruto);
+          convertido =
+            tab && Object.prototype.hasOwnProperty.call(tab.equivalencia, chave)
+              ? tab.equivalencia[chave]
+              : undefined;
           if (convertido === undefined) {
             erros.push({
               local: `${recurso} > ${regra.caminhoOrigem} -> ${regra.caminhoDestino}`,

@@ -10,17 +10,40 @@ import { UnsavedChangesDialog } from './components/mapping/UnsavedChangesDialog'
 import { FHIR_CATALOG } from './data/fhirCatalog';
 import { useMappingWorkspace } from './hooks/useMappingWorkspace';
 import { mappingGateway } from './services/mappingGateway';
-import { RECURSOS_ATIVOS_P3, type RecursoFhir, type RegraCampo } from './types/domain';
+import {
+  RECURSOS_ATIVOS_P3,
+  type RecursoFhir,
+  type RegraCampo,
+  type SentidoTipo,
+} from './types/domain';
 import { obterRegrasDoSentido } from './utils/mappingValidation';
+
+interface RegraEmEdicaoContexto {
+  recurso: RecursoFhir;
+  sentido: SentidoTipo;
+  regra: RegraCampo;
+}
 
 export function App() {
   const ws = useMappingWorkspace(mappingGateway, FHIR_CATALOG);
   const [abaAtiva, setAbaAtiva] = useState<'CAMPOS' | 'PREVIA'>('CAMPOS');
   const [modalJsonAberto, setModalJsonAberto] = useState(false);
-  const [regraEmEdicao, setRegraEmEdicao] = useState<RegraCampo | null>(null);
+  const [edicaoAtual, setEdicaoAtual] = useState<RegraEmEdicaoContexto | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
   const regrasAtuais = obterRegrasDoSentido(ws.draftConfig, ws.recursoAtual, ws.sentidoAtual);
+
+  const regraEmEdicao =
+    edicaoAtual &&
+    edicaoAtual.recurso === ws.recursoAtual &&
+    edicaoAtual.sentido === ws.sentidoAtual &&
+    regrasAtuais.some(
+      (r) =>
+        r.caminhoOrigem === edicaoAtual.regra.caminhoOrigem &&
+        r.caminhoDestino === edicaoAtual.regra.caminhoDestino
+    )
+      ? edicaoAtual.regra
+      : null;
 
   const tabelaDaRegra = regraEmEdicao?.regra.startsWith('TABELA:')
     ? ws.draftConfig.tabelas.find((t) => t.nome === regraEmEdicao.regra.slice('TABELA:'.length))
@@ -71,7 +94,10 @@ export function App() {
             Recurso FHIR:
             <select
               value={ws.recursoAtual}
-              onChange={(e) => ws.solicitarTrocaRecurso(e.target.value as RecursoFhir)}
+              onChange={(e) => {
+                setEdicaoAtual(null);
+                ws.solicitarTrocaRecurso(e.target.value as RecursoFhir);
+              }}
               className="border rounded px-2.5 py-1.5 text-xs bg-white font-semibold"
             >
               {RECURSOS_ATIVOS_P3.map((rec) => (
@@ -85,7 +111,10 @@ export function App() {
           <div className="inline-flex rounded border overflow-hidden text-xs">
             <button
               type="button"
-              onClick={() => ws.setSentidoAtual('LEGADO_PARA_FHIR')}
+              onClick={() => {
+                setEdicaoAtual(null);
+                ws.setSentidoAtual('LEGADO_PARA_FHIR');
+              }}
               className={`px-3 py-1.5 ${
                 ws.sentidoAtual === 'LEGADO_PARA_FHIR'
                   ? 'bg-slate-900 text-white font-medium'
@@ -96,7 +125,10 @@ export function App() {
             </button>
             <button
               type="button"
-              onClick={() => ws.setSentidoAtual('FHIR_PARA_LEGADO')}
+              onClick={() => {
+                setEdicaoAtual(null);
+                ws.setSentidoAtual('FHIR_PARA_LEGADO');
+              }}
               className={`px-3 py-1.5 ${
                 ws.sentidoAtual === 'FHIR_PARA_LEGADO'
                   ? 'bg-slate-900 text-white font-medium'
@@ -121,7 +153,10 @@ export function App() {
           {ws.isDirty && (
             <button
               type="button"
-              onClick={ws.descartarRascunho}
+              onClick={() => {
+                setEdicaoAtual(null);
+                ws.descartarRascunho();
+              }}
               className="text-xs text-slate-600 hover:underline"
             >
               Descartar
@@ -184,7 +219,13 @@ export function App() {
               aplicarInversa: false,
             })
           }
-          onSelecionarRegra={(r) => setRegraEmEdicao(r)}
+          onSelecionarRegra={(r) =>
+            setEdicaoAtual({
+              recurso: ws.recursoAtual,
+              sentido: ws.sentidoAtual,
+              regra: r,
+            })
+          }
         />
       ) : (
         <JsonPreviewTab
@@ -198,18 +239,19 @@ export function App() {
 
       {regraEmEdicao && (
         <RuleDrawer
+          key={`${ws.recursoAtual}:${ws.sentidoAtual}:${regraEmEdicao.caminhoOrigem}->${regraEmEdicao.caminhoDestino}:${regraEmEdicao.regra}`}
           regra={regraEmEdicao}
           tabelaAtual={tabelaDaRegra}
           onAplicar={(params) => {
             const res = ws.salvarRegraNoRascunho(params);
-            if (res.ok) setRegraEmEdicao(null);
+            if (res.ok) setEdicaoAtual(null);
             return res;
           }}
           onRemover={() => {
             ws.removerConexao(regraEmEdicao.caminhoDestino);
-            setRegraEmEdicao(null);
+            setEdicaoAtual(null);
           }}
-          onCancelar={() => setRegraEmEdicao(null)}
+          onCancelar={() => setEdicaoAtual(null)}
         />
       )}
 
