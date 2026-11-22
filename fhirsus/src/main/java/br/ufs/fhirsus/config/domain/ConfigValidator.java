@@ -115,8 +115,8 @@ public class ConfigValidator {
         String campo = rp + ".parametroConversao";
         switch (tipo) {
             case DIRETA -> {
-                if (parametro != null) {
-                    erros.add(new ErroValidacao(campo, "deve ser null em DIRETA"));
+                if (!vazio(parametro)) {
+                    erros.add(new ErroValidacao(campo, "deve ficar vazio em DIRETA"));
                 }
             }
             case DOMINIO -> {

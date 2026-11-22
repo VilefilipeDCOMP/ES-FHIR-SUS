@@ -37,9 +37,8 @@ public class ConfigVersaoEntity {
     @Column(name = "criado_por", nullable = false, length = 100)
     private String criadoPor;
 
-    public ConfigVersaoEntity(Integer versao, String configId, String conteudo, boolean ativa, boolean validada, LocalDateTime criadoEm, String criadoPor) {
+    public ConfigVersaoEntity(Integer versao, String conteudo, boolean ativa, boolean validada, LocalDateTime criadoEm, String criadoPor) {
         this.versao = versao;
-        this.configId = configId;
         this.conteudo = conteudo;
         this.ativa = ativa;
         this.validada = validada;
