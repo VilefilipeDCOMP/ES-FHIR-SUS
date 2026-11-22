@@ -1,6 +1,0 @@
-{
-  "mapeamentos": [
-    { "recurso": "Patient",
-      "regrasToFHIR": [ { "caminhoOrigem": "a", "caminhoDestino": "Patient.gender", "tipoConversao": "INVENTADO" } ] }
-  ]
-}
