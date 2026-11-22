@@ -1,0 +1,38 @@
+package br.ufs.fhirsus.config.web;
+
+import br.ufs.fhirsus.config.domain.ConfigInvalidaException;
+import br.ufs.fhirsus.config.domain.ConfigSintaxeException;
+import java.util.List;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
+@RestControllerAdvice
+public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+
+    @ExceptionHandler(ConfigSintaxeException.class)
+    public ResponseEntity<Map<String, Object>> sintaxe(ConfigSintaxeException e) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(Map.of("erro", "CONFIG_SINTAXE", "mensagem", e.getMessage()));
+    }
+
+    @ExceptionHandler(ConfigInvalidaException.class)
+    public ResponseEntity<Map<String, Object>> invalida(ConfigInvalidaException e) {
+        List<Map<String, String>> detalhes = e.getErros().stream()
+                .map(x -> Map.of("caminho", x.caminho(), "mensagem", x.mensagem())).toList();
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(Map.of("erro", "CONFIG_INVALIDA", "mensagem", e.getMessage(), "detalhes", detalhes));
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, Object>> interno(Exception e) {
+        log.error("Falha inesperada", e);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Map.of("erro", "ERRO_INTERNO", "mensagem", "Operação não concluída; nada foi salvo"));
+    }
+}

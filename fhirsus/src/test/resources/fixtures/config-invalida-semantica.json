@@ -1,0 +1,12 @@
+{
+  "mapeamentos": [
+    { "recurso": "Paciente",
+      "toFHIR": [ { "caminhoOrigem": "$.a", "caminhoDestino": "b", "tipoConversao": "DIRETA", "parametroConversao": null, "obrigatorio": true } ] },
+    { "recurso": "Observation",
+      "toFHIR": [
+        { "caminhoOrigem": "$.x", "caminhoDestino": "valor", "tipoConversao": "DOMINIO", "parametroConversao": "naoExiste" },
+        { "caminhoDestino": "valor", "tipoConversao": "CONSTANTE", "obrigatorio": true }
+      ] },
+    { "recurso": "Specimen" }
+  ]
+}

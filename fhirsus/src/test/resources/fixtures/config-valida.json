@@ -1,0 +1,18 @@
+{
+  "mapeamentos": [
+    {
+      "recurso": "Patient",
+      "toFHIR": [
+        { "caminhoOrigem": "$.paciente.nome", "caminhoDestino": "name[0].text", "tipoConversao": "DIRETA", "parametroConversao": null, "obrigatorio": true },
+        { "caminhoOrigem": "$.paciente.sexo", "caminhoDestino": "gender", "tipoConversao": "DOMINIO", "parametroConversao": "sexo", "obrigatorio": false },
+        { "caminhoDestino": "active", "tipoConversao": "CONSTANTE", "parametroConversao": "true", "obrigatorio": true }
+      ],
+      "toLegado": [
+        { "caminhoOrigem": "$.name[0].text", "caminhoDestino": "paciente.nome", "tipoConversao": "DIRETA", "parametroConversao": null, "obrigatorio": true }
+      ]
+    }
+  ],
+  "dominios": [
+    { "nome": "sexo", "equivalencia": { "M": "male", "F": "female" } }
+  ]
+}
