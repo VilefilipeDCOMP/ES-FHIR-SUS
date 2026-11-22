@@ -9,7 +9,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
  * Tratamento global de exceções para a API Gateway.
- * Converte falhas de validação, sintaxe e regras no formato FHIR OperationOutcome padronizado.
+ * Converte falhas de validação, sintaxe e regras no formato FHIR
+ * OperationOutcome padronizado.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -20,8 +21,7 @@ public class GlobalExceptionHandler {
                 "error",
                 "structure",
                 ex.getMessage(),
-                "payload"
-        );
+                "payload");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(outcome);
     }
 
@@ -31,8 +31,7 @@ public class GlobalExceptionHandler {
                 "error",
                 "structure",
                 "JSON de requisição malformado ou sintaticamente inválido: " + ex.getMostSpecificCause().getMessage(),
-                "request.body"
-        );
+                "request.body");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(outcome);
     }
 
@@ -42,8 +41,29 @@ public class GlobalExceptionHandler {
                 "error",
                 ex.getCodigoErro(),
                 ex.getMessage(),
-                ex.getCampo()
-        );
+                ex.getCampo());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
+    }
+
+    @ExceptionHandler(LabTimeoutException.class)
+    public ResponseEntity<OperationOutcomeDto> handleLabTimeout(LabTimeoutException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                "timeout",
+                ex.getMessage(),
+                "lab.remote"
+        );
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(outcome);
+    }
+
+    @ExceptionHandler(LabUnavailableException.class)
+    public ResponseEntity<OperationOutcomeDto> handleLabUnavailable(LabUnavailableException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                "transient",
+                ex.getMessage(),
+                "lab.remote"
+        );
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(outcome);
     }
 }

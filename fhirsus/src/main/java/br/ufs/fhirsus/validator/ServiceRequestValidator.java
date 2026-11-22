@@ -104,10 +104,12 @@ public class ServiceRequestValidator {
     }
 
     private String extrairCodigoPaciente(JsonNode pat) {
-        if (pat == null || pat.isMissingNode()) return "PAC-001";
-        if (pat.has("identifier") && pat.get("identifier").isArray() && !pat.get("identifier").isEmpty()) {
-            return pat.get("identifier").get(0).path("value").asText("PAC-001");
+        if (pat == null || pat.isMissingNode()) {
+            return null;
         }
-        return pat.path("id").asText("PAC-001");
+        if (pat.has("identifier") && pat.get("identifier").isArray() && !pat.get("identifier").isEmpty()) {
+            return pat.get("identifier").get(0).path("value").asText(null);
+        }
+        return pat.path("id").asText(null);
     }
 }

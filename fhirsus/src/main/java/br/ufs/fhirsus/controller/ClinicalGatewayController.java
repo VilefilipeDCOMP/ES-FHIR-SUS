@@ -10,10 +10,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 
-
- // Controller de entrada clínica do Gateway.
+// Controller de entrada clínica do Gateway.
 @RestController
 @RequestMapping("/api/v1/clinical")
 public class ClinicalGatewayController {
@@ -28,14 +28,21 @@ public class ClinicalGatewayController {
     public ResponseEntity<ClinicalReceptionResponseDto> receberRequisicaoClinica(@RequestBody JsonNode payload) {
         ServiceRequestValidator.ValidClinicalInput input = validator.validar(payload);
 
+        Map<String, String> dados = new LinkedHashMap<>();
+        if (input.numeroPedido() != null) {
+            dados.put("numeroPedido", input.numeroPedido());
+        }
+        if (input.codigoExame() != null) {
+            dados.put("codigoExame", input.codigoExame());
+        }
+        if (input.pacienteCodigo() != null) {
+            dados.put("pacienteCodigo", input.pacienteCodigo());
+        }
+
         ClinicalReceptionResponseDto response = new ClinicalReceptionResponseDto(
                 "RECEBIDO_COM_SUCESSO",
                 "Requisicao clinica sintetica validada com sucesso pelo Gateway",
-                Map.of(
-                        "numeroPedido", input.numeroPedido(),
-                        "codigoExame", input.codigoExame(),
-                        "pacienteCodigo", input.pacienteCodigo()
-                )
+                dados
         );
 
         return ResponseEntity.ok(response);

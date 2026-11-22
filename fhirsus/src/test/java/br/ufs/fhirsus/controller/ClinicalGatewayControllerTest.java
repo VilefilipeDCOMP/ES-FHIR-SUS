@@ -107,7 +107,8 @@ class ClinicalGatewayControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("RECEBIDO_COM_SUCESSO"))
                 .andExpect(jsonPath("$.dadosExtraidos.numeroPedido").value("PED-002"))
-                .andExpect(jsonPath("$.dadosExtraidos.codigoExame").value("GLICEMIA-01"));
+                .andExpect(jsonPath("$.dadosExtraidos.codigoExame").value("GLICEMIA-01"))
+                .andExpect(jsonPath("$.dadosExtraidos.pacienteCodigo").doesNotExist());
     }
 
     @Test
