@@ -11,8 +11,16 @@ import br.ufs.fhirsus.config.repository.AuditoriaMapeamentoRepository;
 import br.ufs.fhirsus.config.repository.ConfigVersaoRepository;
 import br.ufs.fhirsus.config.service.AuditoriaService;
 import br.ufs.fhirsus.config.service.ConfigService;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
@@ -56,6 +64,40 @@ class ConfigServiceTest {
         var ultima = auditoriaRepo.findAllByOrderByIdDesc().get(0);
         assertEquals(2, ultima.getVersaoAtual());
         assertEquals(1, ultima.getVersaoAnterior());
+    }
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void salvamentosSimultaneosMantemUmaAtivaEAuditoria(boolean temVersaoAtiva) throws Exception {
+        String conteudo = Fixtures.ler("config-valida.json");
+        int primeiraVersao = 1;
+        if (temVersaoAtiva) {
+            primeiraVersao = service.salvar(conteudo).getVersao() + 1;
+        }
+        int ultimaVersao = primeiraVersao + 1;
+
+        var inicio = new CyclicBarrier(2);
+        Callable<Integer> salvar = () -> {
+            inicio.await(10, TimeUnit.SECONDS);
+            return service.salvar(conteudo).getVersao();
+        };
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var resultados = executor.invokeAll(List.of(salvar, salvar), 20, TimeUnit.SECONDS);
+            assertEquals(Set.of(primeiraVersao, ultimaVersao),
+                    Set.of(resultados.get(0).get(), resultados.get(1).get()));
+        } finally {
+            executor.shutdownNow();
+        }
+
+        assertEquals(ultimaVersao, configRepo.count());
+        assertEquals(ultimaVersao, configRepo.findByAtivaTrue().orElseThrow().getVersao());
+        var auditorias = auditoriaRepo.findAllByOrderByIdDesc();
+        assertEquals(ultimaVersao, auditorias.size());
+        assertEquals(ultimaVersao, auditorias.get(0).getVersaoAtual());
+        assertEquals(primeiraVersao, auditorias.get(0).getVersaoAnterior());
+        assertEquals(primeiraVersao, auditorias.get(1).getVersaoAtual());
+        assertEquals(temVersaoAtiva ? 1 : null, auditorias.get(1).getVersaoAnterior());
     }
 
     @Test

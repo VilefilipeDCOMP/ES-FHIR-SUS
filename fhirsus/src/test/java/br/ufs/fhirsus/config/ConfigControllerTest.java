@@ -9,6 +9,8 @@ import br.ufs.fhirsus.config.repository.AuditoriaMapeamentoRepository;
 import br.ufs.fhirsus.config.repository.ConfigVersaoRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
@@ -43,6 +45,13 @@ class ConfigControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.versao").value(1))
                 .andExpect(jsonPath("$.ativa").value(true));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"/api/config", "/api/config/validar"})
+    void corpoAusenteRetorna400(String rota) throws Exception {
+        mvc.perform(post(rota).contentType("application/json"))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
