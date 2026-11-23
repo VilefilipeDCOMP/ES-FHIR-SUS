@@ -73,8 +73,8 @@ public class ClinicalOrchestratorService {
         // Filtro 1: Validação estrutural e semântica
         ServiceRequestValidator.ValidClinicalInput input = validator.validar(payload);
         log.info("[FILTRO 1 - VALIDACAO FHIR]: Entrada validada com sucesso!");
-        log.info("  -> Pedido: {} | Exame: {} | Paciente: {}",
-                input.numeroPedido(), input.codigoExame(), input.pacienteCodigo() != null ? input.pacienteCodigo() : "(Nenhum)");
+        log.info("  -> Pedido: {} | Exame: {}",
+                input.numeroPedido(), input.codigoExame());
 
         // Filtro 2: Conversão FHIR -> Legado
         ObjectNode pedidoLegado = conversionEngine.converter(
@@ -133,9 +133,8 @@ public class ClinicalOrchestratorService {
         // 1. Converte e enriquece DiagnosticReport
         ObjectNode diagnosticReport = conversionEngine.converter(respostaLab, "DiagnosticReport", SentidoConversao.TO_FHIR);
         diagnosticReport.put("id", uuidReport.replace("urn:uuid:", ""));
-        if (input.pacienteCodigo() != null) {
-            ObjectNode subjectNode = diagnosticReport.putObject("subject");
-            subjectNode.put("reference", "Patient/" + input.pacienteCodigo());
+        if (input.subject() != null && input.subject().isObject()) {
+            diagnosticReport.set("subject", input.subject().deepCopy());
         }
 
         ArrayNode resultArray = diagnosticReport.putArray("result");
@@ -218,9 +217,8 @@ public class ClinicalOrchestratorService {
                     }
                 }
 
-                if (input.pacienteCodigo() != null) {
-                    ObjectNode subjectNode = observation.putObject("subject");
-                    subjectNode.put("reference", "Patient/" + input.pacienteCodigo());
+                if (input.subject() != null && input.subject().isObject()) {
+                    observation.set("subject", input.subject().deepCopy());
                 }
 
                 // Vincula o UUID desta Observation ao DiagnosticReport.result
@@ -231,6 +229,11 @@ public class ClinicalOrchestratorService {
                 obsEntry.put("fullUrl", uuidObs);
                 obsEntry.set("resource", observation);
             }
+        }
+
+        if (input.patientNode() != null && input.patientFullUrl() != null
+                && input.patientFullUrl().equals(input.subject().path("reference").asText())) {
+            entries.addObject().put("fullUrl", input.patientFullUrl()).set("resource", input.patientNode().deepCopy());
         }
 
         return bundle;

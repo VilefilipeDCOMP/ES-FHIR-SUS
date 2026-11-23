@@ -55,7 +55,7 @@ class PipelineFiltersInspectionTest {
         System.out.println("\nSAÍDA DO FILTRO 1 (Dados Validados e Extraídos):");
         System.out.println("  • Número do Pedido: " + input.numeroPedido());
         System.out.println("  • Código do Exame:   " + input.codigoExame());
-        System.out.println("  • Código do Paciente: " + input.pacienteCodigo());
+        System.out.println("  • Referência do paciente: " + input.subject());
 
         // -----------------------------------------------------------------------------------------
         // FILTRO 2: Conversão FHIR -> Legado (CT-02)
@@ -107,11 +107,11 @@ class PipelineFiltersInspectionTest {
         String uuidObs = "urn:uuid:" + UUID.randomUUID();
 
         diagnosticReport.put("id", uuidReport.replace("urn:uuid:", ""));
-        diagnosticReport.putObject("subject").put("reference", "Patient/" + input.pacienteCodigo());
+        diagnosticReport.set("subject", input.subject());
         diagnosticReport.putArray("result").addObject().put("reference", uuidObs);
 
         observation.put("id", uuidObs.replace("urn:uuid:", ""));
-        observation.putObject("subject").put("reference", "Patient/" + input.pacienteCodigo());
+        observation.set("subject", input.subject());
 
         ArrayNode entries = bundleFinal.putArray("entry");
         entries.addObject().put("fullUrl", uuidReport).set("resource", diagnosticReport);

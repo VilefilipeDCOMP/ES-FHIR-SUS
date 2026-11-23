@@ -8,8 +8,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * Filtro 1 do Pipes and Filters
@@ -33,9 +31,10 @@ public class ServiceRequestValidator {
     public record ValidClinicalInput(
             String numeroPedido,
             String codigoExame,
-            String pacienteCodigo,
+            JsonNode subject,
             JsonNode serviceRequestNode,
-            JsonNode patientNode
+            JsonNode patientNode,
+            String patientFullUrl
     ) {}
 
     public ValidClinicalInput validar(JsonNode root) {
@@ -65,7 +64,7 @@ public class ServiceRequestValidator {
         }
 
         JsonNode serviceRequestNode = null;
-        JsonNode patientNode = null;
+        JsonNode patientEntry = null;
 
         if ("Bundle".equalsIgnoreCase(resourceType)) {
             JsonNode entries = root.path("entry");
@@ -73,87 +72,20 @@ public class ServiceRequestValidator {
                 throw new FhirValidationException("Bundle sem entradas clínicas ('entry')", "Bundle.entry", "required");
             }
 
-            Map<String, JsonNode> resourcesByFullUrl = new HashMap<>();
-            java.util.List<JsonNode> patientResources = new java.util.ArrayList<>();
-            java.util.List<String> patientFullUrls = new java.util.ArrayList<>();
-
+            JsonNode serviceRequestEntry = null;
             for (JsonNode entry : entries) {
-                String fullUrl = entry.path("fullUrl").asText("");
                 JsonNode resource = entry.path("resource");
-                if (!fullUrl.isBlank() && !resource.isMissingNode()) {
-                    resourcesByFullUrl.put(fullUrl, resource);
-                }
-                String innerType = resource.path("resourceType").asText("");
-                if ("ServiceRequest".equalsIgnoreCase(innerType)) {
+                if ("ServiceRequest".equals(resource.path("resourceType").asText())) {
                     serviceRequestNode = resource;
-                } else if ("Patient".equalsIgnoreCase(innerType)) {
-                    patientResources.add(resource);
-                    patientFullUrls.add(fullUrl);
+                    serviceRequestEntry = entry;
                 }
             }
 
-            if (serviceRequestNode == null) {
+            if (serviceRequestEntry == null) {
                 throw new FhirValidationException("Nenhum recurso ServiceRequest encontrado nas entradas do Bundle", "Bundle.entry.resource", "structure");
             }
 
-            String subjectRef = serviceRequestNode.path("subject").path("reference").asText(null);
-            if (subjectRef != null && !subjectRef.isBlank()) {
-                // 1. Busca por correspondência exata em fullUrl
-                if (resourcesByFullUrl.containsKey(subjectRef)) {
-                    JsonNode res = resourcesByFullUrl.get(subjectRef);
-                    if ("Patient".equalsIgnoreCase(res.path("resourceType").asText())) {
-                        patientNode = res;
-                    }
-                }
-
-                // 2. Se não encontrou por fullUrl exato, resolve referências relativas (ex: Patient/p1) ou por id
-                if (patientNode == null) {
-                    String targetId = subjectRef.startsWith("Patient/")
-                            ? subjectRef.substring("Patient/".length())
-                            : subjectRef;
-
-                    for (int i = 0; i < patientResources.size(); i++) {
-                        JsonNode pat = patientResources.get(i);
-                        String fUrl = patientFullUrls.get(i);
-
-                        // Correspondência por id do recurso Patient
-                        String patId = pat.path("id").asText("");
-                        if (!patId.isBlank() && (patId.equals(targetId) || patId.equals(subjectRef))) {
-                            patientNode = pat;
-                            break;
-                        }
-
-                        // Correspondência se fullUrl termina com o subjectRef ou targetId
-                        if (!fUrl.isBlank() && (fUrl.endsWith("/" + subjectRef) || fUrl.endsWith("/" + targetId) || fUrl.endsWith(subjectRef))) {
-                            patientNode = pat;
-                            break;
-                        }
-
-                        // Correspondência por identifier
-                        JsonNode identifiers = pat.path("identifier");
-                        if (identifiers.isArray()) {
-                            boolean matchFound = false;
-                            for (JsonNode ident : identifiers) {
-                                String val = ident.path("value").asText("");
-                                if (!val.isBlank() && (val.equals(targetId) || val.equals(subjectRef))) {
-                                    patientNode = pat;
-                                    matchFound = true;
-                                    break;
-                                }
-                            }
-                            if (matchFound) {
-                                break;
-                            }
-                        }
-                    }
-                }
-            } else if (patientResources.size() == 1) {
-                // Se o ServiceRequest não informa subject.reference mas existe exatamente um Patient no Bundle
-                patientNode = patientResources.get(0);
-            }
-            // NOTA: Se subjectRef foi informado e nenhum Patient correspondeu no Bundle,
-            // patientNode permanece null para evitar vincular a um paciente arbitrário.
-
+            patientEntry = resolverPaciente(entries, serviceRequestEntry);
         } else if ("ServiceRequest".equalsIgnoreCase(resourceType)) {
             serviceRequestNode = root;
         } else {
@@ -171,10 +103,43 @@ public class ServiceRequestValidator {
             throw new FhirValidationException("Código do exame (code.coding.code) ausente no ServiceRequest", "ServiceRequest.code", "required");
         }
 
-        String subjectRefSolicitado = serviceRequestNode.path("subject").path("reference").asText(null);
-        String pacienteCodigo = extrairCodigoPaciente(patientNode, subjectRefSolicitado);
+        JsonNode subject = serviceRequestNode.get("subject");
+        JsonNode patientNode = patientEntry == null ? null : patientEntry.path("resource");
+        String patientFullUrl = patientEntry == null ? null : patientEntry.path("fullUrl").asText(null);
+        return new ValidClinicalInput(numeroPedido, codigoExame, subject, serviceRequestNode, patientNode, patientFullUrl);
+    }
 
-        return new ValidClinicalInput(numeroPedido, codigoExame, pacienteCodigo, serviceRequestNode, patientNode);
+    private JsonNode resolverPaciente(JsonNode entries, JsonNode serviceRequestEntry) {
+        String referencia = serviceRequestEntry.at("/resource/subject/reference").asText("");
+        if (referencia.isBlank()) {
+            return null;
+        }
+
+        String urlPedido = serviceRequestEntry.path("fullUrl").asText("");
+        int inicioRecurso = urlPedido.lastIndexOf("/ServiceRequest/");
+        boolean relativa = referencia.matches("Patient/[A-Za-z0-9.-]{1,64}");
+        String urlAlvo = relativa && inicioRecurso >= 0
+                ? urlPedido.substring(0, inicioRecurso + 1) + referencia
+                : referencia;
+
+        JsonNode correspondencia = null;
+        for (JsonNode entry : entries) {
+            JsonNode recurso = entry.path("resource");
+            if (!"Patient".equals(recurso.path("resourceType").asText())) {
+                continue;
+            }
+            String fullUrl = entry.path("fullUrl").asText("");
+            String id = recurso.path("id").asText("");
+            boolean mesmoId = relativa && (inicioRecurso < 0 || fullUrl.isBlank())
+                    && referencia.equals("Patient/" + id);
+            if (urlAlvo.equals(fullUrl) || mesmoId) {
+                if (correspondencia != null) {
+                    throw new FhirValidationException("Referência de paciente ambígua no Bundle", "ServiceRequest.subject", "invalid");
+                }
+                correspondencia = entry;
+            }
+        }
+        return correspondencia;
     }
 
     private String extrairNumeroPedido(JsonNode sr) {
@@ -190,30 +155,5 @@ public class ServiceRequestValidator {
             return coding.get(0).path("code").asText(null);
         }
         return sr.path("code").path("text").asText(null);
-    }
-
-    private String extrairCodigoPaciente(JsonNode pat, String subjectRefSolicitado) {
-        if (pat != null && !pat.isMissingNode()) {
-            if (pat.has("identifier") && pat.get("identifier").isArray() && !pat.get("identifier").isEmpty()) {
-                String val = pat.get("identifier").get(0).path("value").asText(null);
-                if (val != null && !val.isBlank()) {
-                    return val;
-                }
-            }
-            String id = pat.path("id").asText(null);
-            if (id != null && !id.isBlank()) {
-                return id;
-            }
-        }
-        // Se não encontrou recurso Patient no Bundle mas o ServiceRequest tinha subject explícito
-        if (subjectRefSolicitado != null && !subjectRefSolicitado.isBlank()) {
-            if (subjectRefSolicitado.startsWith("Patient/")) {
-                return subjectRefSolicitado.substring("Patient/".length());
-            }
-            if (!subjectRefSolicitado.startsWith("urn:") && !subjectRefSolicitado.startsWith("http")) {
-                return subjectRefSolicitado;
-            }
-        }
-        return null;
     }
 }

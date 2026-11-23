@@ -88,7 +88,8 @@ class ClinicalOrchestratorServiceTest {
         assertEquals("collection", bundleRetorno.path("type").asText());
 
         JsonNode entries = bundleRetorno.path("entry");
-        assertEquals(2, entries.size(), "Deve conter DiagnosticReport e Observation no Bundle");
+        assertEquals(3, entries.size());
+        assertEquals("urn:uuid:paciente-01", entries.get(2).path("fullUrl").asText());
 
         // Validação da entry[0]: DiagnosticReport
         JsonNode reportEntry = entries.get(0);
@@ -97,7 +98,7 @@ class ClinicalOrchestratorServiceTest {
         assertEquals("DiagnosticReport", report.path("resourceType").asText());
         assertEquals("final", report.path("status").asText());
         assertEquals("ServiceRequest/PED-001", report.path("basedOn").get(0).path("reference").asText());
-        assertEquals("Patient/PAC-001", report.path("subject").path("reference").asText());
+        assertEquals("urn:uuid:paciente-01", report.path("subject").path("reference").asText());
 
         // Validação da entry[1]: Observation
         JsonNode obsEntry = entries.get(1);
@@ -107,7 +108,7 @@ class ClinicalOrchestratorServiceTest {
         assertEquals("final", observation.path("status").asText());
         assertEquals("GLICOSE-01", observation.path("code").path("coding").get(0).path("code").asText());
         assertEquals("99 mg/dL", observation.path("valueString").asText());
-        assertEquals("Patient/PAC-001", observation.path("subject").path("reference").asText());
+        assertEquals("urn:uuid:paciente-01", observation.path("subject").path("reference").asText());
 
         // Correlação interna: DiagnosticReport.result aponta para o fullUrl da Observation
         String obsFullUrl = obsEntry.path("fullUrl").asText();
@@ -148,19 +149,19 @@ class ClinicalOrchestratorServiceTest {
                       }
                     },
                     {
+                      "fullUrl": "http://hospital.example/fhir/Patient/p2",
+                      "resource": {
+                        "resourceType": "Patient",
+                        "id": "p2",
+                        "identifier": [{ "value": "p1" }]
+                      }
+                    },
+                    {
                       "fullUrl": "http://hospital.example/fhir/Patient/p1",
                       "resource": {
                         "resourceType": "Patient",
                         "id": "p1",
                         "identifier": [{ "value": "PAC-CORRETO-01" }]
-                      }
-                    },
-                    {
-                      "fullUrl": "http://hospital.example/fhir/Patient/p2",
-                      "resource": {
-                        "resourceType": "Patient",
-                        "id": "p2",
-                        "identifier": [{ "value": "PAC-INCORRETO-02" }]
                       }
                     }
                   ]
@@ -181,9 +182,9 @@ class ClinicalOrchestratorServiceTest {
         JsonNode report = entries.get(0).path("resource");
         JsonNode obs = entries.get(1).path("resource");
 
-        // O subject deve ser o paciente solicitado p1 (PAC-CORRETO-01), nunca o último do loop (PAC-INCORRETO-02)
-        assertEquals("Patient/PAC-CORRETO-01", report.path("subject").path("reference").asText());
-        assertEquals("Patient/PAC-CORRETO-01", obs.path("subject").path("reference").asText());
+        assertEquals("Patient/p1", report.path("subject").path("reference").asText());
+        assertEquals("Patient/p1", obs.path("subject").path("reference").asText());
+        assertEquals("p1", new ServiceRequestValidator().validar(payloadEntrada).patientNode().path("id").asText());
     }
 
     @Test
