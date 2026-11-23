@@ -44,7 +44,9 @@ public class GlobalExceptionHandler {
                 ex.getCodigoErro(),
                 ex.getMessage(),
                 ex.getCampo());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
+        HttpStatus status = ex instanceof FhirStructuralValidationException
+                ? HttpStatus.BAD_REQUEST : HttpStatus.UNPROCESSABLE_ENTITY;
+        return ResponseEntity.status(status).body(outcome);
     }
 
     @ExceptionHandler(FalhaConversao.class)

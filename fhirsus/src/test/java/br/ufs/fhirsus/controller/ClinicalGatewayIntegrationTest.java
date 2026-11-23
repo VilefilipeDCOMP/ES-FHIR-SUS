@@ -22,12 +22,14 @@ import tools.jackson.databind.node.ObjectNode;
 import java.io.InputStream;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -48,10 +50,7 @@ class ClinicalGatewayIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"HEMOGRAMA", "COLESTEROL", "COLESTEROL-TOTAL", "HDL"})
     void deveRejeitarExameSemEquivalenciaAntesDeChamarLaboratorio(String codigo) throws Exception {
-        var resposta = enviar(pedido(codigo))
-                .andExpect(status().is(422))
-                .andExpect(jsonPath("$.resourceType").value("OperationOutcome"))
-                .andExpect(jsonPath("$.issue[0].code").value("not-supported"))
+        var resposta = verificarOperationOutcome(pedido(codigo), 422, "not-supported")
                 .andExpect(jsonPath("$.issue[0].diagnostics", containsString("CODIGO_SEM_EQUIVALENCIA")))
                 .andExpect(jsonPath("$.issue[0].expression").doesNotExist())
                 .andReturn().getResponse();
@@ -63,13 +62,16 @@ class ClinicalGatewayIntegrationTest {
 
     @Test
     void deveManterExameDaDemonstracaoComMapeamentoPadrao() throws Exception {
-        var labMock = new LabMockController();
-        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong()))
-                .thenAnswer(chamada -> labMock.receberPedidoLegado(chamada.getArgument(0), false, 0).getBody());
+        simularResultadoLaboratorio();
 
-        enviar(pedido("EXAME-001"))
+        var resposta = enviar(pedido("EXAME-001"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.entry[1].resource.code.coding[0].code").value("EXAME-001"));
+                .andExpect(jsonPath("$.resourceType").value("Bundle"))
+                .andExpect(jsonPath("$.entry[1].resource.code.coding[0].code").value("EXAME-001"))
+                .andReturn().getResponse();
+
+        var resultado = validador.validar(resposta.getContentAsString(), "Bundle");
+        assertTrue(resultado.isSuccessful(), () -> resultado.getMessages().toString());
 
         verify(labClient).enviarPedidoLegado(
                 argThat(pedido -> "LAB-042".equals(pedido.path("codigoExame").asText())), anyBoolean(), anyLong());
@@ -77,16 +79,39 @@ class ClinicalGatewayIntegrationTest {
 
     @Test
     void deveUsarOperationOutcomeNasFalhasDeEntrada() throws Exception {
-        enviar("{}")
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.resourceType").value("OperationOutcome"));
+        verificarOperationOutcome("{}", 400, "structure");
 
-        enviar("""
+        verificarOperationOutcome("""
                 {"resourceType":"Bundle","type":"collection"}
-                """)
-                .andExpect(status().is(422))
-                .andExpect(jsonPath("$.resourceType").value("OperationOutcome"));
+                """, 422, "required")
+                .andExpect(jsonPath("$.issue[0].expression[0]").value("Bundle.entry"));
 
+        verifyNoInteractions(labClient);
+    }
+
+    @Test
+    void deveRejeitarJsonMalformado() throws Exception {
+        verificarOperationOutcome("{\"resourceType\":", 400, "structure")
+                .andExpect(jsonPath("$.issue[0].expression[0]").value("request.body"));
+        verifyNoInteractions(labClient);
+    }
+
+    @Test
+    void deveRejeitarRecursoSemResourceType() throws Exception {
+        ObjectNode pedido = (ObjectNode) mapper.readTree(pedido("EXAME-001"));
+        pedido.remove("resourceType");
+        verificarOperationOutcome(pedido.toString(), 400, "required")
+                .andExpect(jsonPath("$.issue[0].expression[0]").value("resourceType"));
+        verifyNoInteractions(labClient);
+    }
+
+    @Test
+    void deveRejeitarServiceRequestSemIntent() throws Exception {
+        ObjectNode pedido = (ObjectNode) mapper.readTree(pedido("EXAME-001"));
+        pedido.remove("intent");
+        verificarOperationOutcome(pedido.toString(), 400, "structure")
+                .andExpect(jsonPath("$.issue[0].diagnostics", containsString("ServiceRequest.intent")))
+                .andExpect(jsonPath("$.issue[0].expression[0]", startsWith("ServiceRequest")));
         verifyNoInteractions(labClient);
     }
 
@@ -97,20 +122,33 @@ class ClinicalGatewayIntegrationTest {
                         new LabUnavailableException("Laboratório indisponível"));
 
         String pedido = pedido("EXAME-001");
-        enviar(pedido)
-                .andExpect(status().isGatewayTimeout())
-                .andExpect(jsonPath("$.resourceType").value("OperationOutcome"))
-                .andExpect(jsonPath("$.issue[0].code").value("timeout"));
+        verificarOperationOutcome(pedido, 504, "timeout")
+                .andExpect(jsonPath("$.issue[0].expression[0]").value("lab.remote"));
 
-        enviar(pedido)
-                .andExpect(status().isBadGateway())
+        verificarOperationOutcome(pedido, 502, "transient")
+                .andExpect(jsonPath("$.issue[0].expression[0]").value("lab.remote"));
+    }
+
+    private void simularResultadoLaboratorio() {
+        var labMock = new LabMockController();
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong()))
+                .thenAnswer(chamada -> labMock.receberPedidoLegado(chamada.getArgument(0), false, 0).getBody());
+    }
+
+    private ResultActions verificarOperationOutcome(String pedido, int http, String codigo) throws Exception {
+        return enviar(pedido)
+                .andExpect(status().is(http))
+                .andExpect(content().contentTypeCompatibleWith("application/fhir+json"))
                 .andExpect(jsonPath("$.resourceType").value("OperationOutcome"))
-                .andExpect(jsonPath("$.issue[0].code").value("transient"));
+                .andExpect(jsonPath("$.issue[0].severity").value("error"))
+                .andExpect(jsonPath("$.issue[0].code").value(codigo))
+                .andExpect(jsonPath("$.issue[0].diagnostics").isNotEmpty());
     }
 
     private ResultActions enviar(String pedido) throws Exception {
         return mvc.perform(post("/api/v1/clinical/requests")
                 .contentType("application/fhir+json")
+                .accept("application/fhir+json")
                 .content(pedido));
     }
 
