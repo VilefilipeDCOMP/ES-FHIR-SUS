@@ -1,8 +1,10 @@
 package br.ufs.fhirsus.controller;
 
 import br.ufs.fhirsus.client.LabLegacyClient;
+import br.ufs.fhirsus.engine.MotorConversaoAdapter;
 import br.ufs.fhirsus.exception.LabTimeoutException;
 import br.ufs.fhirsus.exception.LabUnavailableException;
+import br.ufs.fhirsus.map.SentidoConversao;
 import br.ufs.fhirsus.mock.LabMockController;
 import br.ufs.fhirsus.validacao.ValidadorFhir;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +14,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -25,6 +28,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.startsWith;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -39,6 +43,7 @@ class ClinicalGatewayIntegrationTest {
     @Autowired WebApplicationContext context;
     @Autowired ValidadorFhir validador;
     @MockitoBean LabLegacyClient labClient;
+    @MockitoSpyBean MotorConversaoAdapter motor;
     private final ObjectMapper mapper = new ObjectMapper();
     private MockMvc mvc;
 
@@ -127,6 +132,25 @@ class ClinicalGatewayIntegrationTest {
 
         verificarOperationOutcome(pedido, 502, "transient")
                 .andExpect(jsonPath("$.issue[0].expression[0]").value("lab.remote"));
+    }
+
+    @Test
+    void deveRejeitarLaudoSemStatus() throws Exception {
+        simularResultadoLaboratorio();
+        doAnswer(chamada -> {
+            ObjectNode laudo = (ObjectNode) chamada.callRealMethod();
+            laudo.remove("status");
+            return laudo;
+        }).when(motor).converter(any(), eq("DiagnosticReport"), eq(SentidoConversao.TO_FHIR));
+
+        var resposta = verificarOperationOutcome(pedido("EXAME-001"), 500, "exception")
+                .andExpect(jsonPath("$.issue[0].diagnostics", containsString("DiagnosticReport.status")))
+                .andExpect(jsonPath("$.issue[0].expression[0]", startsWith("Bundle")))
+                .andExpect(jsonPath("$.entry").doesNotExist())
+                .andReturn().getResponse();
+
+        var resultado = validador.validar(resposta.getContentAsString(), "OperationOutcome");
+        assertTrue(resultado.isSuccessful(), () -> resultado.getMessages().toString());
     }
 
     private void simularResultadoLaboratorio() {

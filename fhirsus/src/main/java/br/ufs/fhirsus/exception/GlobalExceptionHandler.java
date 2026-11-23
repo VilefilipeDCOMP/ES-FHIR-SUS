@@ -68,6 +68,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
     }
 
+    @ExceptionHandler(InvalidClinicalOutputException.class)
+    public ResponseEntity<OperationOutcomeDto> handleInvalidClinicalOutput(InvalidClinicalOutputException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of("error", "exception", ex.getMessage(), ex.getCampo());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(outcome);
+    }
+
     @ExceptionHandler(LabTimeoutException.class)
     public ResponseEntity<OperationOutcomeDto> handleLabTimeout(LabTimeoutException ex) {
         OperationOutcomeDto outcome = OperationOutcomeDto.of(
