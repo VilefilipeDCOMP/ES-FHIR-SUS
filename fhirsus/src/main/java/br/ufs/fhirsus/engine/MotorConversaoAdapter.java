@@ -160,10 +160,6 @@ public class MotorConversaoAdapter implements ConversionEngine {
                 equiv.putIfAbsent("GLICEMIA-01", "LAB-042");
                 equiv.putIfAbsent("GLICOSE-01", "LAB-042");
                 equiv.putIfAbsent("GLICOSE", "LAB-042");
-                equiv.putIfAbsent("HEMOGRAMA", "LAB-042");
-                equiv.putIfAbsent("COLESTEROL", "LAB-042");
-                equiv.putIfAbsent("COLESTEROL-TOTAL", "LAB-042");
-                equiv.putIfAbsent("HDL", "LAB-042");
                 equiv.putIfAbsent("LAB-042", "LAB-042");
             } else if ("exames_lab_para_clinica".equals(dom.nome())) {
                 equiv.putIfAbsent("LAB-042", "EXAME-001");
