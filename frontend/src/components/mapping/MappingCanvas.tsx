@@ -1,8 +1,11 @@
 import type React from 'react';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import type { RegraCampo, SentidoTipo } from '../../types/domain';
+import type { RecursoFhir, RegraCampo, SentidoTipo } from '../../types/domain';
 import type { CampoFhirSpec, CampoLegado } from '../../types/ui';
-import { participaDeObrigatoriedade } from '../../data/fhirCatalog';
+import {
+  normalizarCaminhoFhirParaCatalogo,
+  participaDeObrigatoriedade,
+} from '../../data/fhirCatalog';
 
 interface LinhaSvg {
   id: string;
@@ -14,6 +17,7 @@ interface LinhaSvg {
 }
 
 interface Props {
+  recurso: RecursoFhir;
   sentido: SentidoTipo;
   camposLegado: CampoLegado[];
   camposFhir: CampoFhirSpec[];
@@ -22,7 +26,15 @@ interface Props {
   onSelecionarRegra: (regra: RegraCampo) => void;
 }
 
+function normalizarCaminhoLegado(caminho: string | undefined): string {
+  if (!caminho) return '';
+  const limpo = caminho.trim();
+  if (limpo.startsWith('$.')) return limpo.slice(2);
+  return limpo;
+}
+
 export const MappingCanvas: React.FC<Props> = ({
+  recurso,
   sentido,
   camposLegado,
   camposFhir,
@@ -43,10 +55,9 @@ export const MappingCanvas: React.FC<Props> = ({
   const legadoRefs = useRef<Record<string, HTMLElement | null>>({});
   const fhirRefs = useRef<Record<string, HTMLElement | null>>({});
 
-  // Limpa seleção parcial quando o usuário alterna o sentido
   useEffect(() => {
     setOrigemSelecionada(null);
-  }, [sentido]);
+  }, [sentido, recurso]);
 
   const legadoFiltrado = camposLegado.filter((c) =>
     c.caminho.toLowerCase().includes(buscaLegado.toLowerCase())
@@ -58,10 +69,25 @@ export const MappingCanvas: React.FC<Props> = ({
   );
 
   const legadoMapeados = new Set(
-    regras.map((r) => (sentido === 'LEGADO_PARA_FHIR' ? r.caminhoOrigem : r.caminhoDestino))
+    regras
+      .map((r) =>
+        sentido === 'LEGADO_PARA_FHIR'
+          ? normalizarCaminhoLegado(r.tipoConversao === 'CONSTANTE' ? '' : r.caminhoOrigem)
+          : normalizarCaminhoLegado(r.caminhoDestino)
+      )
+      .filter(Boolean)
   );
   const fhirMapeados = new Set(
-    regras.map((r) => (sentido === 'LEGADO_PARA_FHIR' ? r.caminhoDestino : r.caminhoOrigem))
+    regras
+      .map((r) =>
+        sentido === 'LEGADO_PARA_FHIR'
+          ? normalizarCaminhoFhirParaCatalogo(recurso, r.caminhoDestino)
+          : normalizarCaminhoFhirParaCatalogo(
+              recurso,
+              r.tipoConversao === 'CONSTANTE' ? '' : r.caminhoOrigem
+            )
+      )
+      .filter(Boolean)
   );
 
   const recalcularLinhas = useCallback(() => {
@@ -71,10 +97,16 @@ export const MappingCanvas: React.FC<Props> = ({
 
     const novas: LinhaSvg[] = [];
     for (const regra of regras) {
+      if (regra.tipoConversao === 'CONSTANTE') continue;
+
       const chaveLegado =
-        sentido === 'LEGADO_PARA_FHIR' ? regra.caminhoOrigem : regra.caminhoDestino;
+        sentido === 'LEGADO_PARA_FHIR'
+          ? normalizarCaminhoLegado(regra.caminhoOrigem)
+          : normalizarCaminhoLegado(regra.caminhoDestino);
       const chaveFhir =
-        sentido === 'LEGADO_PARA_FHIR' ? regra.caminhoDestino : regra.caminhoOrigem;
+        sentido === 'LEGADO_PARA_FHIR'
+          ? normalizarCaminhoFhirParaCatalogo(recurso, regra.caminhoDestino)
+          : normalizarCaminhoFhirParaCatalogo(recurso, regra.caminhoOrigem);
 
       const elLegado = legadoRefs.current[chaveLegado];
       const elFhir = fhirRefs.current[chaveFhir];
@@ -98,7 +130,7 @@ export const MappingCanvas: React.FC<Props> = ({
       });
     }
     setLinhas(novas);
-  }, [regras, sentido]);
+  }, [recurso, regras, sentido]);
 
   useLayoutEffect(() => {
     recalcularLinhas();
@@ -118,31 +150,37 @@ export const MappingCanvas: React.FC<Props> = ({
   }, [recalcularLinhas]);
 
   const handleCliqueLegado = (caminhoLegado: string) => {
+    const dotPath = normalizarCaminhoLegado(caminhoLegado);
     if (sentido === 'LEGADO_PARA_FHIR') {
+      const jsonPath = `$.${dotPath}`;
       setOrigemSelecionada((prev) =>
-        prev?.caminho === caminhoLegado
+        prev?.caminho === jsonPath
           ? null
-          : { lado: 'LEGADO', caminho: caminhoLegado, obrigatorio: false }
+          : { lado: 'LEGADO', caminho: jsonPath, obrigatorio: false }
       );
     } else if (origemSelecionada?.lado === 'FHIR') {
-      onCriarConexao(origemSelecionada.caminho, caminhoLegado, origemSelecionada.obrigatorio);
+      onCriarConexao(origemSelecionada.caminho, dotPath, origemSelecionada.obrigatorio);
       setOrigemSelecionada(null);
     }
   };
 
   const handleCliqueFhir = (campo: CampoFhirSpec) => {
     const obg = participaDeObrigatoriedade(campo);
+    const dotFhir = normalizarCaminhoFhirParaCatalogo(recurso, campo.caminho);
     if (sentido === 'FHIR_PARA_LEGADO') {
+      const jsonPathFhir = `$.${dotFhir}`;
       setOrigemSelecionada((prev) =>
-        prev?.caminho === campo.caminho
+        prev?.caminho === jsonPathFhir
           ? null
-          : { lado: 'FHIR', caminho: campo.caminho, obrigatorio: obg }
+          : { lado: 'FHIR', caminho: jsonPathFhir, obrigatorio: obg }
       );
     } else if (origemSelecionada?.lado === 'LEGADO') {
-      onCriarConexao(origemSelecionada.caminho, campo.caminho, obg);
+      onCriarConexao(origemSelecionada.caminho, dotFhir, obg);
       setOrigemSelecionada(null);
     }
   };
+
+  const listaNome = sentido === 'LEGADO_PARA_FHIR' ? 'toFHIR' : 'toLegado';
 
   return (
     <div className="space-y-3">
@@ -161,6 +199,54 @@ export const MappingCanvas: React.FC<Props> = ({
         <span className="font-semibold text-slate-800">{regras.length} conexões ativas</span>
       </div>
 
+      {/* Lista interativa de regras do sentido atual (inclui DIRETA, DOMINIO e CONSTANTE) */}
+      <div className="bg-white border rounded-lg p-3 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-semibold text-slate-700">
+            Regras configuradas em <code>{recurso}.{listaNome}</code>
+          </span>
+          <span className="text-[11px] text-slate-500">
+            Clique em uma regra (ou na curva SVG) para editar no painel lateral
+          </span>
+        </div>
+        {regras.length === 0 ? (
+          <p className="text-xs text-slate-500 italic">
+            Nenhuma regra neste sentido (`[]`). Clique nos campos abaixo para conectar.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {regras.map((regra) => {
+              const origemTexto =
+                regra.tipoConversao === 'CONSTANTE'
+                  ? `"${regra.parametroConversao}"`
+                  : regra.caminhoOrigem;
+              const badgeColor =
+                regra.tipoConversao === 'DOMINIO'
+                  ? 'bg-blue-100 text-blue-800 border-blue-300'
+                  : regra.tipoConversao === 'CONSTANTE'
+                  ? 'bg-purple-100 text-purple-800 border-purple-300'
+                  : 'bg-emerald-100 text-emerald-800 border-emerald-300';
+              return (
+                <button
+                  key={`${regra.tipoConversao}:${origemTexto}->${regra.caminhoDestino}`}
+                  type="button"
+                  onClick={() => onSelecionarRegra(regra)}
+                  className="text-xs font-mono px-2.5 py-1.5 rounded border bg-slate-50 hover:bg-slate-100 flex items-center gap-2 transition"
+                >
+                  <span className={`text-[10px] font-sans font-bold px-1.5 py-0.5 rounded border ${badgeColor}`}>
+                    {regra.tipoConversao}
+                    {regra.tipoConversao === 'DOMINIO' ? `:${regra.parametroConversao}` : ''}
+                  </span>
+                  <span>
+                    {origemTexto} → <strong>{regra.caminhoDestino}</strong>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       <div
         ref={containerRef}
         className="relative grid grid-cols-[1fr_140px_1fr] border rounded-lg bg-white overflow-hidden"
@@ -171,7 +257,7 @@ export const MappingCanvas: React.FC<Props> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-800">JSON Legado</h3>
               <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-700">
-                {sentido === 'LEGADO_PARA_FHIR' ? 'Origem' : 'Destino'}
+                {sentido === 'LEGADO_PARA_FHIR' ? 'Origem ($.)' : 'Destino (Dot)'}
               </span>
             </div>
             <input
@@ -189,18 +275,19 @@ export const MappingCanvas: React.FC<Props> = ({
               </p>
             ) : (
               legadoFiltrado.map((campo) => {
-                const mapeado = legadoMapeados.has(campo.caminho);
+                const dotPath = normalizarCaminhoLegado(campo.caminho);
+                const mapeado = legadoMapeados.has(dotPath);
                 const selecionado =
                   origemSelecionada?.lado === 'LEGADO' &&
-                  origemSelecionada.caminho === campo.caminho;
+                  origemSelecionada.caminho === `$.${dotPath}`;
                 return (
                   <button
                     key={campo.caminho}
                     ref={(el) => {
-                      legadoRefs.current[campo.caminho] = el;
+                      legadoRefs.current[dotPath] = el;
                     }}
                     type="button"
-                    onClick={() => handleCliqueLegado(campo.caminho)}
+                    onClick={() => handleCliqueLegado(dotPath)}
                     className={`w-full text-left p-2.5 rounded border text-xs transition ${
                       selecionado
                         ? 'border-blue-600 bg-blue-50 ring-1 ring-blue-600'
@@ -211,7 +298,7 @@ export const MappingCanvas: React.FC<Props> = ({
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono font-semibold text-slate-800 truncate">
-                        {campo.caminho}
+                        {sentido === 'LEGADO_PARA_FHIR' ? `$.${dotPath}` : dotPath}
                       </span>
                       <span className="px-1.5 py-0.5 rounded bg-slate-100 text-[10px] uppercase">
                         {campo.tipo}
@@ -233,7 +320,7 @@ export const MappingCanvas: React.FC<Props> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-slate-800">Recurso FHIR R4</h3>
               <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded bg-slate-200 text-slate-700">
-                {sentido === 'FHIR_PARA_LEGADO' ? 'Origem' : 'Destino'}
+                {sentido === 'FHIR_PARA_LEGADO' ? 'Origem ($.)' : 'Destino (Dot)'}
               </span>
             </div>
             <input
@@ -246,16 +333,17 @@ export const MappingCanvas: React.FC<Props> = ({
           </div>
           <div className="overflow-y-auto p-2 space-y-1.5" onScroll={recalcularLinhas}>
             {fhirFiltrado.map((campo) => {
-              const mapeado = fhirMapeados.has(campo.caminho);
+              const dotFhir = normalizarCaminhoFhirParaCatalogo(recurso, campo.caminho);
+              const mapeado = fhirMapeados.has(dotFhir);
               const obrigatorio = participaDeObrigatoriedade(campo);
               const selecionado =
                 origemSelecionada?.lado === 'FHIR' &&
-                origemSelecionada.caminho === campo.caminho;
+                origemSelecionada.caminho === `$.${dotFhir}`;
               return (
                 <button
                   key={campo.caminho}
                   ref={(el) => {
-                    fhirRefs.current[campo.caminho] = el;
+                    fhirRefs.current[dotFhir] = el;
                   }}
                   type="button"
                   onClick={() => handleCliqueFhir(campo)}
@@ -271,7 +359,7 @@ export const MappingCanvas: React.FC<Props> = ({
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-mono font-semibold text-slate-800 truncate">
-                      {campo.caminho}
+                      {sentido === 'FHIR_PARA_LEGADO' ? `$.${dotFhir}` : dotFhir}
                       {obrigatorio && <span className="text-red-600 ml-1">*</span>}
                     </span>
                     <div className="flex items-center gap-1 shrink-0">
@@ -320,7 +408,7 @@ export const MappingCanvas: React.FC<Props> = ({
           {linhas.map((l) => {
             const cx = (l.x1 + l.x2) / 2;
             const d = `M ${l.x1} ${l.y1} C ${cx} ${l.y1}, ${cx} ${l.y2}, ${l.x2} ${l.y2}`;
-            const ehTabela = l.regra.regra.startsWith('TABELA:');
+            const ehDominio = l.regra.tipoConversao === 'DOMINIO';
             return (
               <g key={l.id} className="pointer-events-auto cursor-pointer group">
                 <path
@@ -333,7 +421,7 @@ export const MappingCanvas: React.FC<Props> = ({
                 <path
                   d={d}
                   fill="none"
-                  stroke={ehTabela ? '#2563eb' : '#10b981'}
+                  stroke={ehDominio ? '#2563eb' : '#10b981'}
                   strokeWidth={2.5}
                   markerEnd="url(#seta-mapeamento)"
                   className="group-hover:stroke-indigo-700"
