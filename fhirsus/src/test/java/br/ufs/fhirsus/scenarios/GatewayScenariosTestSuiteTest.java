@@ -24,6 +24,7 @@ import java.nio.charset.StandardCharsets;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -120,6 +121,25 @@ class GatewayScenariosTestSuiteTest {
                 .andExpect(jsonPath("$.type").value("collection"))
                 .andExpect(jsonPath("$.entry[0].resource.resourceType").value("DiagnosticReport"))
                 .andExpect(jsonPath("$.entry[1].resource.resourceType").value("Observation"));
+    }
+
+    @Test
+    void deveRejeitarBundleComDoisPedidosAntesDeChamarLaboratorio() throws Exception {
+        ObjectNode bundle = (ObjectNode) mapper.readTree(carregarFixture("solicitacao-bundle-entrada.json"));
+        var entradas = bundle.withArray("entry");
+        ObjectNode segundoPedido = (ObjectNode) entradas.get(0).deepCopy();
+        segundoPedido.put("fullUrl", "urn:uuid:5efd8ec0-80b1-4e96-9999-2ae52c587dd0");
+        ((ObjectNode) segundoPedido.at("/resource/identifier/0")).put("value", "PED-002");
+        entradas.add(segundoPedido);
+
+        clinicalMockMvc.perform(post("/api/v1/clinical/requests")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(bundle.toString()))
+                .andExpect(status().is(422))
+                .andExpect(jsonPath("$.resourceType").value("OperationOutcome"))
+                .andExpect(jsonPath("$.issue[0].diagnostics").value("O Bundle deve conter apenas um ServiceRequest"));
+
+        verifyNoInteractions(labClient);
     }
 
     @Test

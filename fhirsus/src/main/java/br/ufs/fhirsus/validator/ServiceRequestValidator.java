@@ -76,6 +76,9 @@ public class ServiceRequestValidator {
             for (JsonNode entry : entries) {
                 JsonNode resource = entry.path("resource");
                 if ("ServiceRequest".equals(resource.path("resourceType").asText())) {
+                    if (serviceRequestEntry != null) {
+                        throw new FhirValidationException("O Bundle deve conter apenas um ServiceRequest", "Bundle.entry.resource", "structure");
+                    }
                     serviceRequestNode = resource;
                     serviceRequestEntry = entry;
                 }
