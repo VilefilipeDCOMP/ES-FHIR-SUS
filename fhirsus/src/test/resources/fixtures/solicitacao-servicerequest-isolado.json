@@ -1,11 +1,22 @@
 {
   "resourceType": "ServiceRequest",
   "id": "PED-002",
+  "identifier": [
+    {
+      "system": "https://clinica.example/identificadores/pedidos",
+      "value": "PED-002"
+    }
+  ],
+  "status": "active",
+  "intent": "order",
+  "subject": {
+    "reference": "Patient/PAC-002"
+  },
   "code": {
     "coding": [
       {
         "system": "https://clinica.example/codigos/exames",
-        "code": "GLICEMIA-01"
+        "code": "EXAME-001"
       }
     ]
   }

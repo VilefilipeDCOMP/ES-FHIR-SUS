@@ -45,13 +45,13 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
     }
 
-    @ExceptionHandler(br.ufs.fhirsus.engine.FalhaConversao.class)
-    public ResponseEntity<OperationOutcomeDto> handleFalhaConversao(br.ufs.fhirsus.engine.FalhaConversao ex) {
+    @ExceptionHandler(br.ufs.fhirsus.map.FalhaConversao.class)
+    public ResponseEntity<OperationOutcomeDto> handleFalhaConversaoMotorOficial(br.ufs.fhirsus.map.FalhaConversao ex) {
         OperationOutcomeDto outcome = OperationOutcomeDto.of(
                 "error",
-                ex.getCodigo(),
+                ex.getCodigo() != null ? ex.getCodigo().name() : "conversion_error",
                 ex.getMessage(),
-                ex.getCaminho()
+                ex.getCaminho() != null ? ex.getCaminho() : "conversion.engine"
         );
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
     }

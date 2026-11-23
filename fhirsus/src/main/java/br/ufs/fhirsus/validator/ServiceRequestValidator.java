@@ -2,8 +2,11 @@ package br.ufs.fhirsus.validator;
 
 import br.ufs.fhirsus.exception.FhirValidationException;
 import br.ufs.fhirsus.exception.InvalidPayloadException;
-import tools.jackson.databind.JsonNode;
+import br.ufs.fhirsus.validacao.ValidadorFhir;
+import ca.uhn.fhir.validation.ValidationResult;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.JsonNode;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -11,9 +14,21 @@ import java.util.Map;
 /**
  * Filtro 1 do Pipes and Filters
  * Validação estrutural e semântica de entrada da requisição clínica (Bundle / ServiceRequest).
+ * Integração oficial com HAPI FHIR Validator (Filipe Ciríaco).
  */
 @Component
 public class ServiceRequestValidator {
+
+    private final ValidadorFhir validadorFhir;
+
+    public ServiceRequestValidator() {
+        this.validadorFhir = null;
+    }
+
+    @Autowired
+    public ServiceRequestValidator(@Autowired(required = false) ValidadorFhir validadorFhir) {
+        this.validadorFhir = validadorFhir;
+    }
 
     public record ValidClinicalInput(
             String numeroPedido,
@@ -31,6 +46,22 @@ public class ServiceRequestValidator {
         String resourceType = root.path("resourceType").asText(null);
         if (resourceType == null || resourceType.isBlank()) {
             throw new FhirValidationException("Campo 'resourceType' obrigatório ausente no payload", "resourceType", "required");
+        }
+
+        // Validação semântica e estrutural via HAPI FHIR R4 (quando disponível)
+        if (validadorFhir != null) {
+            ValidationResult resultadoFhir = validadorFhir.validar(root.toString(), resourceType);
+            if (!resultadoFhir.isSuccessful() && resultadoFhir.getMessages() != null && !resultadoFhir.getMessages().isEmpty()) {
+                var primeiroErro = resultadoFhir.getMessages().stream()
+                        .filter(m -> m.getSeverity() == ca.uhn.fhir.validation.ResultSeverityEnum.ERROR)
+                        .findFirst()
+                        .orElse(resultadoFhir.getMessages().get(0));
+                throw new FhirValidationException(
+                        primeiroErro.getMessage(),
+                        primeiroErro.getLocationString() != null ? primeiroErro.getLocationString() : resourceType,
+                        "structure"
+                );
+            }
         }
 
         JsonNode serviceRequestNode = null;

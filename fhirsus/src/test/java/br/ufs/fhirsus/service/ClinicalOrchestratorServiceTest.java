@@ -1,7 +1,7 @@
 package br.ufs.fhirsus.service;
 
 import br.ufs.fhirsus.client.LabLegacyClient;
-import br.ufs.fhirsus.engine.MockConversionEngine;
+import br.ufs.fhirsus.engine.MotorConversaoAdapter;
 import br.ufs.fhirsus.validator.ServiceRequestValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,7 +24,7 @@ class ClinicalOrchestratorServiceTest {
     @BeforeEach
     void setUp() {
         ServiceRequestValidator validator = new ServiceRequestValidator();
-        MockConversionEngine engine = new MockConversionEngine();
+        MotorConversaoAdapter engine = new MotorConversaoAdapter(null);
         labClient = mock(LabLegacyClient.class);
         service = new ClinicalOrchestratorService(validator, engine, labClient);
     }

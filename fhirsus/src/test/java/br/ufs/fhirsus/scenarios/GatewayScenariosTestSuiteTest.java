@@ -3,7 +3,7 @@ package br.ufs.fhirsus.scenarios;
 import br.ufs.fhirsus.client.LabLegacyClient;
 import br.ufs.fhirsus.controller.ClinicalGatewayController;
 import br.ufs.fhirsus.controller.HealthController;
-import br.ufs.fhirsus.engine.MockConversionEngine;
+import br.ufs.fhirsus.engine.MotorConversaoAdapter;
 import br.ufs.fhirsus.exception.GlobalExceptionHandler;
 import br.ufs.fhirsus.exception.LabTimeoutException;
 import br.ufs.fhirsus.exception.LabUnavailableException;
@@ -45,7 +45,7 @@ class GatewayScenariosTestSuiteTest {
     @BeforeEach
     void setUp() {
         ServiceRequestValidator validator = new ServiceRequestValidator();
-        MockConversionEngine engine = new MockConversionEngine();
+        MotorConversaoAdapter engine = new MotorConversaoAdapter(null);
         labClient = mock(LabLegacyClient.class);
         ClinicalOrchestratorService service = new ClinicalOrchestratorService(validator, engine, labClient);
 

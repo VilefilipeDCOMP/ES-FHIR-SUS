@@ -2,8 +2,8 @@ package br.ufs.fhirsus.scenarios;
 
 import br.ufs.fhirsus.client.LabClientProperties;
 import br.ufs.fhirsus.client.LabLegacyClient;
-import br.ufs.fhirsus.engine.MockConversionEngine;
-import br.ufs.fhirsus.engine.SentidoConversao;
+import br.ufs.fhirsus.engine.MotorConversaoAdapter;
+import br.ufs.fhirsus.map.SentidoConversao;
 import br.ufs.fhirsus.mock.LabMockController;
 import br.ufs.fhirsus.validator.ServiceRequestValidator;
 import org.junit.jupiter.api.DisplayName;
@@ -62,7 +62,7 @@ class PipelineFiltersInspectionTest {
         // -----------------------------------------------------------------------------------------
         System.out.println("\n" + "-".repeat(85));
         System.out.println(">>> [FILTRO 2 - MOTOR DE CONVERSÃO: FHIR ➔ JSON LEGADO (CT-02)]");
-        MockConversionEngine engine = new MockConversionEngine();
+        MotorConversaoAdapter engine = new MotorConversaoAdapter(null);
         ObjectNode pedidoLegado = engine.converter(input.serviceRequestNode(), "ServiceRequest", SentidoConversao.TO_LEGADO);
         System.out.println("SAÍDA DO FILTRO 2 (Payload Legado Gerado para Envio ao Laboratório):");
         System.out.println(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(pedidoLegado));

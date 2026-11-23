@@ -9,10 +9,13 @@
 
 A suíte automatizada de testes do Gateway foi construída para cobrir a matriz completa de cenários de sucesso, validação sintática e semântica, resiliência de rede e conformidade com os contratos HL7 FHIR R4 acordados (CT-01, CT-02, CT-04, CT-05, ADR03, ADR09 e UC-01 do P2).
 
-* **Total de Testes Executados:** 29 testes
+Após o merge de integração com as frentes dos colegas (Danilo Campos, Luiz Manoel e Filipe Ciríaco), a suíte completa conta com o adaptador oficial `MotorConversaoAdapter`, conectando o Gateway ao motor de regras em memória, ao validador HAPI FHIR R4 e ao versionamento em PostgreSQL.
+
+* **Total de Testes do Gateway e Adaptação:** 35 testes
+* **Total da Suíte Integrada do Projeto (Todos os Integrantes):** 97 testes
 * **Total de Falhas / Erros:** 0 falhas / 0 erros
 * **Taxa de Sucesso:** 100% (`BUILD SUCCESS`)
-* **Tempo Total de Execução:** 25.060 segundos
+* **Tempo de Execução da Suíte Completa:** ~1 min 12 s
 
 ---
 
@@ -36,59 +39,77 @@ Esta suíte consome diretamente as fixtures sintéticas padronizadas em `src/tes
 
 ---
 
-## 3. Cobertura por Classe de Teste
+## 3. Cobertura por Classe de Teste da Frente Gateway
 
 | Classe de Teste | Quantidade de Testes | Foco Arquitetural | Status |
 |:---|:---:|:---|:---:|
 | `GatewayScenariosTestSuiteTest` | 11 | Matriz completa de cenários com fixtures JSON | ✅ 11/11 PASSOU |
 | `ClinicalGatewayControllerTest` | 7 | Controller clínico REST e tratamento global de erros | ✅ 7/7 PASSOU |
 | `LabMockControllerTest` | 5 | Mock do laboratório legado (sucesso, rejeição e simulação de erro) | ✅ 5/5 PASSOU |
+| `MotorConversaoAdapterTest` | 5 | Adaptador do motor oficial, integração com PostgreSQL e fallback | ✅ 5/5 PASSOU |
 | `LabLegacyClientTest` | 4 | Cliente HTTP nativo do Java 21 com timeout de socket e leitura | ✅ 4/4 PASSOU |
 | `ClinicalOrchestratorServiceTest` | 1 | Pipeline Pipes and Filters e montagem correlacionada do Bundle | ✅ 1/1 PASSOU |
+| `PipelineFiltersInspectionTest` | 1 | Inspeção detalhada passo a passo dos 5 filtros do pipeline | ✅ 1/1 PASSOU |
 | `HealthControllerTest` | 1 | Rota operacional de diagnóstico e metadados P3 | ✅ 1/1 PASSOU |
-| **TOTAL** | **29** | **Cobertura Integral das Issues API-01 a API-05** | **100% SUCESSO** |
+| **TOTAL GATEWAY** | **35** | **Cobertura Integral das Issues API-01 a API-05 + Adaptação** | **100% SUCESSO** |
 
 ---
 
-## 4. Log Real de Execução do Maven
+## 4. Cobertura da Suíte Completa Integrada (Todos os Integrantes)
+
+| Módulo / Frente | Responsável | Classes Testadas | Quantidade de Testes | Status |
+|:---|:---|:---|:---:|:---:|
+| **API / Gateway** | Bruno Rocha | `ClinicalGatewayController`, `ClinicalOrchestratorService`, `LabLegacyClient`, `LabMockController`, `HealthController`, `MotorConversaoAdapter` | 35 | ✅ 35/35 PASSOU |
+| **Motor de Conversão** | Luiz Manoel | `MotorConversao`, `CaminhoJson`, `DominioValores`, `ValidacaoCaminhos`, `SaidaJson` | 21 | ✅ 21/21 PASSOU |
+| **Configuração & Banco** | Danilo Campos | `ConfigController`, `ConfigService`, `ConfigValidator`, `ConfigParser` | 26 | ✅ 26/26 PASSOU |
+| **Validação FHIR R4** | Filipe Ciríaco | `ValidadorFhir` (HAPI FHIR R4 Validator) | 14 | ✅ 14/14 PASSOU |
+| **Aplicação** | Geral | `FhirsusApplicationTests` (Carregamento do Contexto Spring Boot) | 1 | ✅ 1/1 PASSOU |
+| **TOTAL GERAL** | **Equipe FHIR SUS+** | **46 classes de produção** | **97** | **100% SUCESSO** |
+
+---
+
+## 5. Log Real de Execução do Maven
 
 ```text
 [INFO] -------------------------------------------------------
 [INFO]  T E S T S
 [INFO] -------------------------------------------------------
 [INFO] Running br.ufs.fhirsus.client.LabLegacyClientTest
-[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.096 s -- in br.ufs.fhirsus.client.LabLegacyClientTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.237 s -- in br.ufs.fhirsus.client.LabLegacyClientTest
+[INFO] Running br.ufs.fhirsus.config.ConfigControllerTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.781 s -- in br.ufs.fhirsus.config.ConfigControllerTest
+[INFO] Running br.ufs.fhirsus.config.ConfigParserTest
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.089 s -- in br.ufs.fhirsus.config.ConfigParserTest
+[INFO] Running br.ufs.fhirsus.config.ConfigServiceTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.176 s -- in br.ufs.fhirsus.config.ConfigServiceTest
+[INFO] Running br.ufs.fhirsus.config.ConfigValidatorTest
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.046 s -- in br.ufs.fhirsus.config.ConfigValidatorTest
 [INFO] Running br.ufs.fhirsus.controller.ClinicalGatewayControllerTest
-[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.182 s -- in br.ufs.fhirsus.controller.ClinicalGatewayControllerTest
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.158 s -- in br.ufs.fhirsus.controller.ClinicalGatewayControllerTest
 [INFO] Running br.ufs.fhirsus.controller.HealthControllerTest
-[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.038 s -- in br.ufs.fhirsus.controller.HealthControllerTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.016 s -- in br.ufs.fhirsus.controller.HealthControllerTest
+[INFO] Running br.ufs.fhirsus.engine.MotorConversaoAdapterTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.203 s -- in br.ufs.fhirsus.engine.MotorConversaoAdapterTest
+[INFO] Running br.ufs.fhirsus.FhirsusApplicationTests
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.298 s -- in br.ufs.fhirsus.FhirsusApplicationTests
+[INFO] Running br.ufs.fhirsus.map.MotorConversaoTest
+[INFO] Tests run: 21, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.197 s -- in br.ufs.fhirsus.map.MotorConversaoTest
 [INFO] Running br.ufs.fhirsus.mock.LabMockControllerTest
-[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.092 s -- in br.ufs.fhirsus.mock.LabMockControllerTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.033 s -- in br.ufs.fhirsus.mock.LabMockControllerTest
 [INFO] Running br.ufs.fhirsus.scenarios.GatewayScenariosTestSuiteTest
-[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.364 s -- in br.ufs.fhirsus.scenarios.GatewayScenariosTestSuiteTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.183 s -- in br.ufs.fhirsus.scenarios.GatewayScenariosTestSuiteTest
+[INFO] Running br.ufs.fhirsus.scenarios.PipelineFiltersInspectionTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.021 s -- in br.ufs.fhirsus.scenarios.PipelineFiltersInspectionTest
 [INFO] Running br.ufs.fhirsus.service.ClinicalOrchestratorServiceTest
-[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.018 s -- in br.ufs.fhirsus.service.ClinicalOrchestratorServiceTest
+[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.020 s -- in br.ufs.fhirsus.service.ClinicalOrchestratorServiceTest
+[INFO] Running br.ufs.fhirsus.validacao.ValidadorFhirTest
+[INFO] Tests run: 14, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 25.50 s -- in br.ufs.fhirsus.validacao.ValidadorFhirTest
 [INFO] 
 [INFO] Results:
 [INFO] 
-[INFO] Tests run: 29, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 97, Failures: 0, Errors: 0, Skipped: 0
 [INFO] 
 [INFO] ------------------------------------------------------------------------
 [INFO] BUILD SUCCESS
 [INFO] ------------------------------------------------------------------------
-[INFO] Total time:  25.060 s
-[INFO] Finished at: 2026-11-22T19:41:04-03:00
-[INFO] ------------------------------------------------------------------------
 ```
-
----
-
-## 5. Rastreabilidade com Requisitos e Decisões de Arquitetura
-
-* **RF001 / UC-01:** Recepção do pedido de exame, validação semântica e orquestração do ciclo síncrono comprovada nos Cenários 01 e 02.
-* **RF002:** Conversão bidirecional FHIR $\leftrightarrow$ JSON Legado comprovada na montagem do laudo com `DiagnosticReport` e `Observation`.
-* **RF016:** Envio HTTP com timeout configurável de socket e leitura comprovado no `LabLegacyClientTest` e Cenário 08.
-* **CT-01 / CT-05:** Fixtures sintéticas coerentes salvas em `src/test/resources/fixtures/` e utilizadas em testes reproduzíveis.
-* **CT-02:** Assinatura `converter(payload, recurso, sentido)` respeitada via `ConversionEngine`.
-* **CT-04 / ADR03:** Respostas de erro padronizadas exclusivamente como HL7 FHIR `OperationOutcome` para todos os códigos HTTP (400, 422, 502, 504).
-* **ADR09:** Validação rigorosa dos campos obrigatórios HL7 FHIR R4 sem criação de dados forjados ou fallbacks artificiais.

@@ -1,7 +1,7 @@
 package br.ufs.fhirsus.controller;
 
 import br.ufs.fhirsus.client.LabLegacyClient;
-import br.ufs.fhirsus.engine.MockConversionEngine;
+import br.ufs.fhirsus.engine.MotorConversaoAdapter;
 import br.ufs.fhirsus.exception.GlobalExceptionHandler;
 import br.ufs.fhirsus.exception.LabTimeoutException;
 import br.ufs.fhirsus.exception.LabUnavailableException;
@@ -31,7 +31,7 @@ class ClinicalGatewayControllerTest {
     @BeforeEach
     void setUp() {
         ServiceRequestValidator validator = new ServiceRequestValidator();
-        MockConversionEngine engine = new MockConversionEngine();
+        MotorConversaoAdapter engine = new MotorConversaoAdapter(null);
         labClient = mock(LabLegacyClient.class);
         ClinicalOrchestratorService service = new ClinicalOrchestratorService(validator, engine, labClient);
         ClinicalGatewayController controller = new ClinicalGatewayController(service);
@@ -203,7 +203,7 @@ class ClinicalGatewayControllerTest {
                 {
                   "resourceType": "ServiceRequest",
                   "id": "PED-004",
-                  "code": { "coding": [{ "code": "HEMOGRAMA" }] }
+                  "code": { "coding": [{ "code": "EXAME-001" }] }
                 }
                 """;
 
@@ -226,7 +226,7 @@ class ClinicalGatewayControllerTest {
                 {
                   "resourceType": "ServiceRequest",
                   "id": "PED-005",
-                  "code": { "coding": [{ "code": "COLESTEROL" }] }
+                  "code": { "coding": [{ "code": "EXAME-001" }] }
                 }
                 """;
 

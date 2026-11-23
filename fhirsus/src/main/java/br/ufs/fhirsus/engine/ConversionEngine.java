@@ -1,5 +1,6 @@
 package br.ufs.fhirsus.engine;
 
+import br.ufs.fhirsus.map.SentidoConversao;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 

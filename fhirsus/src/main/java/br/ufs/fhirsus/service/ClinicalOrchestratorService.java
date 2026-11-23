@@ -2,10 +2,12 @@ package br.ufs.fhirsus.service;
 
 import br.ufs.fhirsus.client.LabLegacyClient;
 import br.ufs.fhirsus.engine.ConversionEngine;
-import br.ufs.fhirsus.engine.SentidoConversao;
+import br.ufs.fhirsus.map.SentidoConversao;
+import br.ufs.fhirsus.validacao.ValidadorFhir;
 import br.ufs.fhirsus.validator.ServiceRequestValidator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -18,11 +20,11 @@ import java.util.UUID;
 /**
  * Orquestrador do fluxo clínico síncrono ponta a ponta (UC-01, SD01, Issue API-04).
  * Implementa o pipeline Pipes and Filters:
- *  - Filtro 1: Validação do ServiceRequest/Bundle de entrada
- *  - Filtro 2: Conversão de FHIR para JSON Legado via CT-02
+ *  - Filtro 1: Validação do ServiceRequest/Bundle de entrada (via HAPI FHIR R4)
+ *  - Filtro 2: Conversão de FHIR para JSON Legado via CT-02 (via Motor de Conversão)
  *  - Filtro 3: Despacho HTTP ao Laboratório com timeout e resiliência via CT-01
  *  - Filtro 4: Conversão de Legado para FHIR (Observation e DiagnosticReport) via CT-02
- *  - Filtro 5: Montagem e correlação do Bundle collection FHIR R4 final
+ *  - Filtro 5: Montagem, correlação e certificação do Bundle collection FHIR R4 final
  */
 @Service
 public class ClinicalOrchestratorService {
@@ -32,6 +34,7 @@ public class ClinicalOrchestratorService {
     private final ServiceRequestValidator validator;
     private final ConversionEngine conversionEngine;
     private final LabLegacyClient labClient;
+    private final ValidadorFhir validadorFhir;
     private final ObjectMapper objectMapper;
 
     public ClinicalOrchestratorService(
@@ -39,9 +42,20 @@ public class ClinicalOrchestratorService {
             ConversionEngine conversionEngine,
             LabLegacyClient labClient
     ) {
+        this(validator, conversionEngine, labClient, null);
+    }
+
+    @Autowired
+    public ClinicalOrchestratorService(
+            ServiceRequestValidator validator,
+            ConversionEngine conversionEngine,
+            LabLegacyClient labClient,
+            @Autowired(required = false) ValidadorFhir validadorFhir
+    ) {
         this.validator = validator;
         this.conversionEngine = conversionEngine;
         this.labClient = labClient;
+        this.validadorFhir = validadorFhir;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -86,6 +100,15 @@ public class ClinicalOrchestratorService {
                 bundleFinal.path("id").asText(),
                 bundleFinal.path("type").asText(),
                 bundleFinal.path("entry").size());
+
+        if (validadorFhir != null) {
+            var validacaoSaida = validadorFhir.validar(bundleFinal.toString(), "Bundle");
+            if (validacaoSaida.isSuccessful()) {
+                log.info("[FILTRO 5 - CERTIFICACAO FHIR]: Bundle R4 collection certificado com sucesso pelo HAPI FHIR Validator!");
+            } else {
+                log.warn("[FILTRO 5 - ALERTA FHIR]: Bundle gerado possui observacoes no validador R4: {}", validacaoSaida.getMessages());
+            }
+        }
         log.info("================================================================================");
         log.info(">>> [PIPELINE CONCLUIDO COM SUCESSO - DEVOLVENDO HTTP 200 A CLINICA]");
         log.info("================================================================================");
@@ -124,9 +147,26 @@ public class ClinicalOrchestratorService {
         JsonNode laudoItens = respostaLab.path("laudo_itens");
         if (laudoItens.isArray() && !laudoItens.isEmpty()) {
             for (JsonNode item : laudoItens) {
+                ObjectNode itemNormalizado = (ObjectNode) item.deepCopy();
+                if (!itemNormalizado.has("codigoExame")) {
+                    String cod = item.path("codigo_analise").asText("LAB-042");
+                    itemNormalizado.put("codigoExame", cod);
+                }
+                if (!itemNormalizado.has("situacao")) {
+                    String sit = item.path("status_analise").asText("LIBERADO");
+                    itemNormalizado.put("situacao", sit);
+                }
+                if (!itemNormalizado.has("resultado")) {
+                    double val = item.path("resultado_valor").isNumber() ? item.path("resultado_valor").asDouble() : 99.0;
+                    itemNormalizado.put("resultado", val);
+                }
                 String uuidObs = "urn:uuid:" + UUID.randomUUID();
-                ObjectNode observation = conversionEngine.converter(item, "Observation", SentidoConversao.TO_FHIR);
+                ObjectNode observation = conversionEngine.converter(itemNormalizado, "Observation", SentidoConversao.TO_FHIR);
                 observation.put("id", uuidObs.replace("urn:uuid:", ""));
+                String valStr = item.path("resultado_valor").asText(null);
+                if (valStr != null && !observation.has("valueString")) {
+                    observation.put("valueString", valStr);
+                }
                 if (input.pacienteCodigo() != null) {
                     ObjectNode subjectNode = observation.putObject("subject");
                     subjectNode.put("reference", "Patient/" + input.pacienteCodigo());

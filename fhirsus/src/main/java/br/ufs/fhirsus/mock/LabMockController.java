@@ -47,7 +47,14 @@ public class LabMockController {
         }
 
         String idPedido = pedidoLegado.path("codigo_pedido").asText(null);
+        if (idPedido == null) {
+            idPedido = pedidoLegado.path("numeroPedido").asText(null);
+        }
+
         String idExame = pedidoLegado.path("codigo_exame").asText(null);
+        if (idExame == null) {
+            idExame = pedidoLegado.path("codigoExame").asText(null);
+        }
 
         if (idPedido == null || idPedido.isBlank()) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -63,12 +70,16 @@ public class LabMockController {
         resposta.put("status_execucao", "CONCLUIDO");
         resposta.put("numero_protocolo_lab", "LAB-" + System.currentTimeMillis());
         resposta.put("codigo_pedido", idPedido);
+        resposta.put("numeroPedido", idPedido);
 
         var resultados = resposta.putArray("laudo_itens");
         ObjectNode item = resultados.addObject();
         item.put("codigo_analise", idExame);
+        item.put("codigoExame", idExame);
         item.put("resultado_valor", "99 mg/dL");
+        item.put("resultado", 99.0);
         item.put("status_analise", "FINAL");
+        item.put("situacao", "LIBERADO");
         item.put("observacao_tecnica", "Resultado dentro da faixa de referência sintética do P3");
 
         return ResponseEntity.ok(resposta);
