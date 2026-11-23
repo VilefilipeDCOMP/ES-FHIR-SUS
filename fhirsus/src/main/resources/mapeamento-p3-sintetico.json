@@ -69,7 +69,7 @@
           "caminhoDestino": "valueQuantity.value",
           "tipoConversao": "DIRETA",
           "parametroConversao": null,
-          "obrigatorio": true
+          "obrigatorio": false
         }
       ]
     }

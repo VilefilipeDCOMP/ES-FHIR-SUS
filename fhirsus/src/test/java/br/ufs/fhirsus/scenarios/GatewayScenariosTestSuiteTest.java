@@ -249,7 +249,7 @@ class GatewayScenariosTestSuiteTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resourceType").value("Bundle"))
                 .andExpect(jsonPath("$.type").value("collection"))
-                .andExpect(jsonPath("$.entry.length()").value(4))
+                .andExpect(jsonPath("$.entry.length()").value(5))
                 .andExpect(jsonPath("$.entry[0].resource.resourceType").value("DiagnosticReport"))
                 .andExpect(jsonPath("$.entry[0].resource.result.length()").value(3))
                 .andExpect(jsonPath("$.entry[1].resource.resourceType").value("Observation"))
@@ -260,6 +260,7 @@ class GatewayScenariosTestSuiteTest {
                 .andExpect(jsonPath("$.entry[2].resource.valueString").value("180 mg/dL"))
                 .andExpect(jsonPath("$.entry[3].resource.resourceType").value("Observation"))
                 .andExpect(jsonPath("$.entry[3].resource.code.coding[0].code").value("HDL"))
-                .andExpect(jsonPath("$.entry[3].resource.valueString").value("55 mg/dL"));
+                .andExpect(jsonPath("$.entry[3].resource.valueString").value("55 mg/dL"))
+                .andExpect(jsonPath("$.entry[4].resource.resourceType").value("Patient"));
     }
 }

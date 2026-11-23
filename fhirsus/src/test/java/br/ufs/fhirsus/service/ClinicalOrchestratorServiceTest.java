@@ -1,7 +1,9 @@
 package br.ufs.fhirsus.service;
 
 import br.ufs.fhirsus.client.LabLegacyClient;
+import br.ufs.fhirsus.engine.ConversionEngine;
 import br.ufs.fhirsus.engine.MotorConversaoAdapter;
+import br.ufs.fhirsus.map.SentidoConversao;
 import br.ufs.fhirsus.validator.ServiceRequestValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -207,6 +209,10 @@ class ClinicalOrchestratorServiceTest {
         item3.put("codigo_analise", "HDL");
         item3.put("resultado_valor", "55 mg/dL");
 
+        itens.addObject().put("codigo_analise", "HDL");
+        itens.addObject().put("codigo_analise", "HDL").put("resultado_valor", " ");
+        itens.addObject().put("codigo_analise", "HDL").put("resultado", 0);
+
         when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(labResponse);
 
         String bundleEntrada = """
@@ -248,7 +254,7 @@ class ClinicalOrchestratorServiceTest {
         assertNotNull(bundleRetorno);
 
         JsonNode entries = bundleRetorno.path("entry");
-        assertEquals(4, entries.size(), "1 DiagnosticReport + 3 Observations");
+        assertEquals(7, entries.size(), "1 DiagnosticReport + 6 Observations");
 
         // Checa as 3 observations
         JsonNode obs1 = entries.get(1).path("resource");
@@ -262,5 +268,39 @@ class ClinicalOrchestratorServiceTest {
         JsonNode obs3 = entries.get(3).path("resource");
         assertEquals("55 mg/dL", obs3.path("valueString").asText());
         assertFalse(obs3.has("valueQuantity"), "Não deve conter valueQuantity junto com valueString");
+
+        for (int i = 4; i <= 5; i++) {
+            JsonNode semResultado = entries.get(i).path("resource");
+            assertFalse(semResultado.has("valueQuantity"));
+            assertFalse(semResultado.has("valueString"));
+        }
+
+        JsonNode zeroMedido = entries.get(6).path("resource");
+        assertTrue(zeroMedido.at("/valueQuantity/value").isNumber());
+        assertEquals(0, zeroMedido.at("/valueQuantity/value").asInt());
+        assertFalse(zeroMedido.has("valueString"));
+    }
+
+    @Test
+    void deveRemoverOutrosTiposDeValorGeradosPeloMapeamento() {
+        ConversionEngine engine = mock(ConversionEngine.class);
+        when(engine.converter(any(), eq("DiagnosticReport"), eq(SentidoConversao.TO_FHIR)))
+                .thenReturn(mapper.createObjectNode());
+        when(engine.converter(any(), eq("Observation"), eq(SentidoConversao.TO_FHIR)))
+                .thenReturn(mapper.createObjectNode().put("valueBoolean", true).put("valueInteger", 1));
+
+        ObjectNode laudo = mapper.createObjectNode();
+        laudo.putArray("laudo_itens").addObject().put("resultado", "Reagente");
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
+
+        JsonNode pedido = mapper.readTree("""
+                {"resourceType":"ServiceRequest","id":"ped-1","code":{"text":"LAB-042"}}
+                """);
+        var orquestrador = new ClinicalOrchestratorService(new ServiceRequestValidator(), engine, labClient);
+
+        JsonNode observation = orquestrador.processarFluxoCompleto(pedido).at("/entry/1/resource");
+        assertEquals("Reagente", observation.path("valueString").asText());
+        assertFalse(observation.has("valueBoolean"));
+        assertFalse(observation.has("valueInteger"));
     }
 }

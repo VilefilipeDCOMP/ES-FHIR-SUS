@@ -30,8 +30,6 @@ import java.util.UUID;
 public class ClinicalOrchestratorService {
 
     private static final Logger log = LoggerFactory.getLogger(ClinicalOrchestratorService.class);
-    private static final java.util.regex.Pattern PATTERN_NUMERO_UNIDADE =
-            java.util.regex.Pattern.compile("^\\s*([+-]?\\d+(?:[.,]\\d+)?)\\s*(.*)$");
 
     private final ServiceRequestValidator validator;
     private final ConversionEngine conversionEngine;
@@ -158,64 +156,17 @@ public class ClinicalOrchestratorService {
                     itemNormalizado.put("situacao", sit);
                 }
 
-                // Parse explícito de medições laboratoriais preservando valores reais
-                Double valorNumerico = null;
-                String unidade = null;
-                String textoOriginal = null;
-
-                if (item.hasNonNull("resultado") && item.path("resultado").isNumber()) {
-                    valorNumerico = item.path("resultado").asDouble();
-                }
-
-                if (item.hasNonNull("resultado_valor")) {
-                    if (item.path("resultado_valor").isNumber()) {
-                        if (valorNumerico == null) {
-                            valorNumerico = item.path("resultado_valor").asDouble();
-                        }
-                    } else {
-                        textoOriginal = item.path("resultado_valor").asText().trim();
-                        var matcher = PATTERN_NUMERO_UNIDADE.matcher(textoOriginal);
-                        if (matcher.matches()) {
-                            try {
-                                double parsed = Double.parseDouble(matcher.group(1).replace(',', '.'));
-                                if (valorNumerico == null) {
-                                    valorNumerico = parsed;
-                                }
-                                String u = matcher.group(2).trim();
-                                if (!u.isEmpty()) {
-                                    unidade = u;
-                                }
-                            } catch (NumberFormatException ignored) {}
-                        }
-                    }
-                }
-
-                if (valorNumerico != null) {
-                    itemNormalizado.put("resultado", valorNumerico);
-                } else if (!itemNormalizado.has("resultado")) {
-                    // Valor neutro para satisfazer regras configuradas que exigem campo resultado no motor
-                    itemNormalizado.put("resultado", 0.0);
+                JsonNode resultado = obterResultado(item);
+                if (resultado == null) {
+                    itemNormalizado.remove("resultado");
+                } else {
+                    itemNormalizado.set("resultado", resultado);
                 }
 
                 String uuidObs = "urn:uuid:" + UUID.randomUUID();
                 ObjectNode observation = conversionEngine.converter(itemNormalizado, "Observation", SentidoConversao.TO_FHIR);
                 observation.put("id", uuidObs.replace("urn:uuid:", ""));
-
-                // FHIR R4: Apenas uma representação de Observation.value[x] (mutuamente exclusivos)
-                if (textoOriginal != null && !textoOriginal.isBlank()) {
-                    // Preserva o resultado textual original do laboratório sem manufaturar valores
-                    observation.remove("valueQuantity");
-                    observation.put("valueString", textoOriginal);
-                } else if (valorNumerico != null) {
-                    observation.remove("valueString");
-                    ObjectNode valQuantity = observation.has("valueQuantity") && observation.get("valueQuantity").isObject()
-                            ? (ObjectNode) observation.get("valueQuantity")
-                            : observation.putObject("valueQuantity");
-                    valQuantity.put("value", valorNumerico);
-                    if (unidade != null && !unidade.isBlank()) {
-                        valQuantity.put("unit", unidade);
-                    }
-                }
+                aplicarResultado(observation, resultado);
 
                 if (input.subject() != null && input.subject().isObject()) {
                     observation.set("subject", input.subject().deepCopy());
@@ -237,5 +188,34 @@ public class ClinicalOrchestratorService {
         }
 
         return bundle;
+    }
+
+    private JsonNode obterResultado(JsonNode item) {
+        JsonNode valor = item.path("resultado_valor");
+        if (valor.isString() && !valor.asText().isBlank()) {
+            return valor;
+        }
+        JsonNode resultado = item.path("resultado");
+        if (resultado.isNumber() || (resultado.isString() && !resultado.asText().isBlank())) {
+            return resultado;
+        }
+        return valor.isNumber() ? valor : null;
+    }
+
+    private void aplicarResultado(ObjectNode observation, JsonNode resultado) {
+        boolean numerico = resultado != null && resultado.isNumber();
+        var camposRemovidos = observation.propertyNames().stream()
+                .filter(campo -> campo.matches("_?value[A-Z].*"))
+                .filter(campo -> !numerico || !"valueQuantity".equals(campo))
+                .toList();
+        observation.remove(camposRemovidos);
+
+        if (numerico) {
+            ObjectNode quantidade = observation.get("valueQuantity") instanceof ObjectNode mapeada
+                    ? mapeada : observation.putObject("valueQuantity");
+            quantidade.set("value", resultado);
+        } else if (resultado != null) {
+            observation.set("valueString", resultado);
+        }
     }
 }
