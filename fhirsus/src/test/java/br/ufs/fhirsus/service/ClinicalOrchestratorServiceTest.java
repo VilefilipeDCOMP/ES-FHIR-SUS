@@ -298,7 +298,7 @@ class ClinicalOrchestratorServiceTest {
         when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
 
         JsonNode pedido = mapper.readTree("""
-                {"resourceType":"ServiceRequest","id":"ped-1","code":{"text":"LAB-042"}}
+                {"resourceType":"ServiceRequest","id":"ped-1","code":{"coding":[{"code":"EXAME-001"}]}}
                 """);
         var orquestrador = new ClinicalOrchestratorService(new ServiceRequestValidator(), engine, labClient);
 
@@ -318,7 +318,7 @@ class ClinicalOrchestratorServiceTest {
         when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
 
         JsonNode pedido = mapper.readTree("""
-                {"resourceType":"ServiceRequest","id":"ped-1","code":{"text":"LAB-042"}}
+                {"resourceType":"ServiceRequest","id":"ped-1","code":{"coding":[{"code":"EXAME-001"}]}}
                 """);
 
         assertThrows(br.ufs.fhirsus.exception.InvalidPayloadException.class, () ->
@@ -346,7 +346,7 @@ class ClinicalOrchestratorServiceTest {
         when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
 
         JsonNode pedido = mapper.readTree("""
-                {"resourceType":"ServiceRequest","id":"ped-1","code":{"text":"EXAME-001"}}
+                {"resourceType":"ServiceRequest","id":"ped-1","code":{"coding":[{"code":"EXAME-001"}]}}
                 """);
         var orquestrador = new ClinicalOrchestratorService(new ServiceRequestValidator(), engine, labClient);
 
@@ -381,7 +381,7 @@ class ClinicalOrchestratorServiceTest {
                     }
                   ],
                   "subject": { "reference": "#p1" },
-                  "code": { "text": "EXAME-001" }
+                  "code": { "coding": [{ "code": "EXAME-001" }] }
                 }
                 """);
 

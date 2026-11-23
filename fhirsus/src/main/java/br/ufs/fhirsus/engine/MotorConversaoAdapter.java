@@ -94,11 +94,32 @@ public class MotorConversaoAdapter implements ConversionEngine {
 
     private JsonNode normalizarPayload(JsonNode payload, String recurso, SentidoConversao sentido) {
         if ("ServiceRequest".equalsIgnoreCase(recurso) && sentido == SentidoConversao.TO_LEGADO && payload != null) {
+            ObjectNode srCopy = null;
             boolean temIdentifier = payload.has("identifier") && payload.get("identifier").isArray() && !payload.get("identifier").isEmpty();
             if (!temIdentifier && payload.has("id")) {
-                ObjectNode srCopy = (ObjectNode) payload.deepCopy();
+                srCopy = (ObjectNode) payload.deepCopy();
                 ArrayNode identArr = srCopy.putArray("identifier");
                 identArr.addObject().put("value", payload.path("id").asText());
+            }
+            boolean temCoding = payload.at("/code/coding/0/code").isTextual();
+            if (!temCoding && payload.at("/code/text").isTextual()) {
+                if (srCopy == null) {
+                    srCopy = (ObjectNode) payload.deepCopy();
+                }
+                String textCode = payload.at("/code/text").asText();
+                ObjectNode codeObj = srCopy.has("code") && srCopy.get("code").isObject()
+                        ? (ObjectNode) srCopy.get("code")
+                        : srCopy.putObject("code");
+                ArrayNode coding = codeObj.has("coding") && codeObj.get("coding").isArray()
+                        ? (ArrayNode) codeObj.get("coding")
+                        : codeObj.putArray("coding");
+                if (coding.isEmpty()) {
+                    coding.addObject().put("code", textCode);
+                } else if (!coding.get(0).has("code")) {
+                    ((ObjectNode) coding.get(0)).put("code", textCode);
+                }
+            }
+            if (srCopy != null) {
                 return srCopy;
             }
         }
