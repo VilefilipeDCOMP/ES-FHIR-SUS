@@ -145,7 +145,7 @@ export const CONFIG_INICIAL_SINTETICA: MapeamentoConfig = {
           caminhoDestino: 'valueQuantity.value',
           tipoConversao: 'DIRETA',
           parametroConversao: null,
-          obrigatorio: true,
+          obrigatorio: false,
         },
       ],
     },
@@ -153,15 +153,28 @@ export const CONFIG_INICIAL_SINTETICA: MapeamentoConfig = {
   dominios: [
     {
       nome: 'exames_clinica_para_lab',
-      equivalencia: { 'EXAME-001': 'LAB-042' },
+      equivalencia: {
+        'EXAME-001': 'LAB-042',
+        'GLICEMIA-01': 'LAB-042',
+        'GLICOSE-01': 'LAB-042',
+        'LAB-042': 'LAB-042',
+      },
     },
     {
       nome: 'exames_lab_para_clinica',
-      equivalencia: { 'LAB-042': 'EXAME-001' },
+      equivalencia: {
+        'LAB-042': 'EXAME-001',
+        'EXAME-001': 'EXAME-001',
+        'GLICEMIA-01': 'EXAME-001',
+        'GLICOSE-01': 'EXAME-001',
+      },
     },
     {
       nome: 'status_lab_para_fhir',
-      equivalencia: { LIBERADO: 'final' },
+      equivalencia: {
+        LIBERADO: 'final',
+        FINAL: 'final',
+      },
     },
   ],
 };

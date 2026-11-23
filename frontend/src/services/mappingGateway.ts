@@ -26,7 +26,9 @@ export interface MappingGateway {
   ): Promise<ResultadoOperacao & { configConfirmada?: MapeamentoConfig }>;
 }
 
-const usarMock = import.meta.env.VITE_USE_MOCK_API !== 'false';
+const emAmbienteDeTeste = import.meta.env.MODE === 'test';
+const usarMock =
+  emAmbienteDeTeste || import.meta.env.VITE_USE_MOCK_API === 'true';
 
 export const mappingGateway: MappingGateway = usarMock
   ? criarMockMappingApi(CONFIG_INICIAL_SINTETICA)

@@ -1,3 +1,4 @@
+import { CONFIG_INICIAL_SINTETICA } from '../data/syntheticExamples';
 import type { MapeamentoConfig } from '../types/domain';
 import type { ErroValidacao } from '../types/ui';
 import {
@@ -5,6 +6,7 @@ import {
   serializarConfigParaContrato,
 } from '../utils/mappingValidation';
 import { SemConfigAtivaError, type MappingGateway } from './mappingGateway';
+import { criarMockMappingApi } from './mockMappingApi';
 
 /**
  * cliente HTTP alinhado ao ConfigController.java (/api/config, /api/config/ativa, /api/config/validar)
@@ -194,6 +196,24 @@ export const httpMappingApi: MappingGateway = {
         config: serializarConfigParaContrato(params.config),
       }),
     });
+
+    if (res.status === 404) {
+      // Fallback de prévia local quando o backend não expõe endpoint /api/config/testar
+      const sim = await criarMockMappingApi(CONFIG_INICIAL_SINTETICA).testarConversao(
+        params
+      );
+      return {
+        ...sim,
+        avisos: [
+          {
+            local: 'Prévia de Conversão Local',
+            motivo:
+              'O servidor de configuração não expõe /api/config/testar (HTTP 404). A prévia foi simulada localmente com as regras do MotorConversao.',
+            severidade: 'AVISO',
+          },
+        ],
+      };
+    }
 
     if (!res.ok) {
       return {

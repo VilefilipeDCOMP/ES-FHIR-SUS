@@ -15,6 +15,7 @@ import type {
   ResultadoAcaoLocal,
   ResultadoOperacao,
 } from '../types/ui';
+import { CONFIG_INICIAL_SINTETICA } from '../data/syntheticExamples';
 import { SemConfigAtivaError, type MappingGateway } from '../services/mappingGateway';
 import { validarConfiguracaoDesconhecida } from '../utils/configSchema';
 import {
@@ -92,16 +93,24 @@ export function useMappingWorkspace(
       })
       .catch((err: unknown) => {
         if (!montado) return;
+        const rascunhoPadrao = serializarConfigParaContrato(CONFIG_INICIAL_SINTETICA);
+        const primeiroRecurso = rascunhoPadrao.mapeamentos[0];
+        if (primeiroRecurso) {
+          setRecursoAtual(primeiroRecurso.recurso);
+          if (primeiroRecurso.toFHIR.length === 0 && primeiroRecurso.toLegado.length > 0) {
+            setSentidoAtual('FHIR_PARA_LEGADO');
+          }
+        }
         if (err instanceof SemConfigAtivaError) {
           setEstadoConexao('SEM_CONFIG_ATIVA');
           setActiveConfig(CONFIG_VAZIA);
-          setDraftConfig(CONFIG_VAZIA);
+          setDraftConfig(structuredClone(rascunhoPadrao));
           setResultadoOperacao({
             acao: 'VALIDAR',
             sucesso: true,
             timestamp: new Date().toISOString(),
             mensagemResumo:
-              'Nenhuma configuração ativa publicada no servidor. Inicie um novo rascunho ou importe um arquivo.',
+              'Nenhuma configuração ativa publicada no servidor. Rascunho inicializado com a fixture sintética do P3 — clique em "Salvar mapeamento" para publicar.',
             erros: [],
             avisos: [
               {
@@ -114,15 +123,18 @@ export function useMappingWorkspace(
           return;
         }
         setEstadoConexao('ERRO_CONSULTA');
+        setActiveConfig(CONFIG_VAZIA);
+        setDraftConfig(structuredClone(rascunhoPadrao));
         setResultadoOperacao({
           acao: 'VALIDAR',
           sucesso: false,
           timestamp: new Date().toISOString(),
-          mensagemResumo: 'Não foi possível carregar a configuração ativa do servidor.',
+          mensagemResumo:
+            'Não foi possível carregar a configuração ativa do servidor. Exibindo rascunho sintético local.',
           erros: [
             {
               local: 'API /api/config/ativa',
-              motivo: 'Falha de comunicação ao inicializar a interface.',
+              motivo: 'Falha de comunicação ao inicializar a interface (verifique se o backend está ativo na porta 8080).',
               severidade: 'ERRO',
             },
           ],
