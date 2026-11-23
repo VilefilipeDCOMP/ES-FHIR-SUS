@@ -1,0 +1,98 @@
+package br.ufs.fhirsus.exception;
+
+import br.ufs.fhirsus.controller.ClinicalGatewayController;
+import br.ufs.fhirsus.dto.fhir.OperationOutcomeDto;
+import br.ufs.fhirsus.map.FalhaConversao;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+/**
+ * Tratamento global de exceções para a API Gateway.
+ * Converte falhas de validação, sintaxe e regras no formato FHIR
+ * OperationOutcome padronizado.
+ */
+@RestControllerAdvice(assignableTypes = ClinicalGatewayController.class)
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(InvalidPayloadException.class)
+    public ResponseEntity<OperationOutcomeDto> handleInvalidPayload(InvalidPayloadException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                "structure",
+                ex.getMessage(),
+                "payload");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(outcome);
+    }
+
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<OperationOutcomeDto> handleHttpMessageNotReadable(HttpMessageNotReadableException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                "structure",
+                "JSON de requisição malformado ou sintaticamente inválido: " + ex.getMostSpecificCause().getMessage(),
+                "request.body");
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(outcome);
+    }
+
+    @ExceptionHandler(FhirValidationException.class)
+    public ResponseEntity<OperationOutcomeDto> handleFhirValidation(FhirValidationException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                ex.getCodigoErro(),
+                ex.getMessage(),
+                ex.getCampo());
+        HttpStatus status = ex instanceof FhirStructuralValidationException
+                ? HttpStatus.BAD_REQUEST : HttpStatus.UNPROCESSABLE_ENTITY;
+        return ResponseEntity.status(status).body(outcome);
+    }
+
+    @ExceptionHandler(FalhaConversao.class)
+    public ResponseEntity<OperationOutcomeDto> handleFalhaConversaoMotorOficial(FalhaConversao ex) {
+        FalhaConversao.Codigo codigo = ex.getCodigo();
+        String tipo = codigo == null ? "processing" : switch (codigo) {
+            case ENTRADA_INVALIDA -> "invalid";
+            case CAMPO_OBRIGATORIO -> "required";
+            case VALOR_INVALIDO -> "value";
+            case CODIGO_SEM_EQUIVALENCIA, REGRA_NAO_SUPORTADA -> "not-supported";
+            case CONFIGURACAO_INVALIDA, MAPEAMENTO_INEXISTENTE, CAMINHO_INVALIDO,
+                    DOMINIO_INEXISTENTE, DESTINO_CONFLITANTE -> "processing";
+        };
+        String diagnostico = codigo == null ? ex.getMessage() : "[" + codigo.name() + "] " + ex.getMessage();
+        if (ex.getCaminho() != null) {
+            diagnostico += " Caminho no mapeamento: " + ex.getCaminho();
+        }
+        OperationOutcomeDto outcome = OperationOutcomeDto.of("error", tipo, diagnostico, null);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
+    }
+
+    @ExceptionHandler(InvalidClinicalOutputException.class)
+    public ResponseEntity<OperationOutcomeDto> handleInvalidClinicalOutput(InvalidClinicalOutputException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of("error", "exception", ex.getMessage(), ex.getCampo());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(outcome);
+    }
+
+    @ExceptionHandler(LabTimeoutException.class)
+    public ResponseEntity<OperationOutcomeDto> handleLabTimeout(LabTimeoutException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                "timeout",
+                ex.getMessage(),
+                "lab.remote"
+        );
+        return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(outcome);
+    }
+
+    @ExceptionHandler(LabUnavailableException.class)
+    public ResponseEntity<OperationOutcomeDto> handleLabUnavailable(LabUnavailableException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of(
+                "error",
+                "transient",
+                ex.getMessage(),
+                "lab.remote"
+        );
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(outcome);
+    }
+}

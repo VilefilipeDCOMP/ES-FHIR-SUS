@@ -1,0 +1,32 @@
+name: Validar fluxo de branches
+
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited]
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-branch-flow:
+    name: Validar origem e destino
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Conferir branches do pull request
+        env:
+          HEAD: ${{ github.event.pull_request.head.ref }}
+          BASE: ${{ github.event.pull_request.base.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+        shell: bash
+        run: |
+          if [[ "$BASE" == "dev" && "$HEAD" == feature/* ]]; then
+            echo "Fluxo permitido: feature/* -> dev"
+          elif [[ "$BASE" == "main" && "$HEAD" == "dev" && "$HEAD_REPO" == "$BASE_REPO" ]]; then
+            echo "Fluxo permitido: dev -> main"
+          else
+            echo "::error::Fluxo não permitido: $HEAD_REPO:$HEAD -> $BASE_REPO:$BASE"
+            exit 1
+          fi

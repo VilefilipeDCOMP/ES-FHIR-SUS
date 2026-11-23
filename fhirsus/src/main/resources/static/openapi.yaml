@@ -1,0 +1,126 @@
+openapi: 3.0.3
+info:
+  title: FHIR SUS+ Gateway API
+  description: API Gateway REST síncrono para interoperabilidade entre sistemas clínicos e laboratórios no padrão HL7 FHIR R4. Recorte exclusivo Projeto Integrador P3.
+  version: 1.0.0-P3
+  contact:
+    name: Bruno Carvalho Santana Rocha (@BrunocsRocha)
+paths:
+  /api/v1/health:
+    get:
+      summary: Health Check da API Gateway
+      description: Retorna o status operacional da instância do Gateway e metadados do P3.
+      responses:
+        '200':
+          description: Instância operacional (UP)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /api/v1/clinical/requests:
+    post:
+      summary: Recepção de Solicitação Clínica (Exames Laboratoriais)
+      description: Recebe solicitação clínica em formato FHIR R4 (Bundle collection ou ServiceRequest isolado), valida e orquestra o ciclo síncrono.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+          application/fhir+json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Ciclo síncrono concluído com sucesso. Retorna Bundle FHIR R4.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BundleResponse'
+        '400':
+          description: Requisição sintaticamente inválida ou JSON malformado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+        '422':
+          description: Recurso semanticamente inválido ou campos obrigatórios ausentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+        '502':
+          description: Falha ou indisponibilidade no laboratório simulado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+        '504':
+          description: Tempo limite (timeout) excedido na comunicação com o laboratório.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationOutcome'
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          example: UP
+        timestamp:
+          type: string
+          format: date-time
+        gateway:
+          type: string
+          example: FHIR-SUS+
+        versao:
+          type: string
+          example: 1.0.0-P3
+        detalhes:
+          type: object
+
+    BundleResponse:
+      type: object
+      properties:
+        resourceType:
+          type: string
+          example: Bundle
+        type:
+          type: string
+          example: collection
+        entry:
+          type: array
+          items:
+            type: object
+
+    OperationOutcome:
+      type: object
+      required:
+        - resourceType
+        - issue
+      properties:
+        resourceType:
+          type: string
+          example: OperationOutcome
+        issue:
+          type: array
+          items:
+            type: object
+            properties:
+              severity:
+                type: string
+                example: error
+              code:
+                type: string
+                example: invalid
+              diagnostics:
+                type: string
+                example: Campo obrigatório ausente
+              expression:
+                type: array
+                items:
+                  type: string

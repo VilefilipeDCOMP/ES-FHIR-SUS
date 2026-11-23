@@ -1,0 +1,96 @@
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:relatorio-laudo-01",
+      "resource": {
+        "resourceType": "DiagnosticReport",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "https://clinica.example/codigos/laudos",
+              "code": "LAUDO-LAB",
+              "display": "Relatorio Laboratorial Sintetico P3"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:54814e57-6be4-4469-a052-7ce6aef6a1f2"
+        },
+        "basedOn": [
+          {
+            "reference": "urn:uuid:d24c3ced-2413-4dbd-9cd1-f389253e441e"
+          }
+        ],
+        "result": [
+          {
+            "reference": "urn:uuid:observacao-resultado-01"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observacao-resultado-01",
+      "resource": {
+        "resourceType": "Observation",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "https://clinica.example/codigos/exames",
+              "code": "EXAME-001"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:54814e57-6be4-4469-a052-7ce6aef6a1f2"
+        },
+        "valueString": "99 mg/dL",
+        "note": [
+          {
+            "text": "Resultado dentro da faixa de referência sintética do P3"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:54814e57-6be4-4469-a052-7ce6aef6a1f2",
+      "resource": {
+        "resourceType": "Patient",
+        "identifier": [
+          {
+            "system": "https://clinica.example/identificadores/pacientes",
+            "value": "PAC-001"
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:d24c3ced-2413-4dbd-9cd1-f389253e441e",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "identifier": [
+          {
+            "system": "https://clinica.example/identificadores/pedidos",
+            "value": "PED-001"
+          }
+        ],
+        "status": "active",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "https://clinica.example/codigos/exames",
+              "code": "EXAME-001"
+            }
+          ]
+        },
+        "subject": {
+          "reference": "urn:uuid:54814e57-6be4-4469-a052-7ce6aef6a1f2"
+        }
+      }
+    }
+  ]
+}
