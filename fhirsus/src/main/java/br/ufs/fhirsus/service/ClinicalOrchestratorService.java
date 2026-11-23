@@ -148,10 +148,14 @@ public class ClinicalOrchestratorService {
         if (laudoItens.isArray() && !laudoItens.isEmpty()) {
             for (JsonNode item : laudoItens) {
                 ObjectNode itemNormalizado = (ObjectNode) item.deepCopy();
-                if (!itemNormalizado.has("codigoExame")) {
-                    String cod = item.path("codigo_analise").asText("LAB-042");
-                    itemNormalizado.put("codigoExame", cod);
+                String cod = item.hasNonNull("codigoExame")
+                        ? item.get("codigoExame").asText()
+                        : item.path("codigo_analise").asText(null);
+                if (cod == null || cod.isBlank()) {
+                    throw new br.ufs.fhirsus.exception.InvalidPayloadException("Item do laudo laboratorial sem código de exame ('codigoExame' ou 'codigo_analise')");
                 }
+                itemNormalizado.put("codigoExame", cod);
+
                 if (!itemNormalizado.has("situacao")) {
                     String sit = item.path("status_analise").asText("LIBERADO");
                     itemNormalizado.put("situacao", sit);
@@ -221,7 +225,12 @@ public class ClinicalOrchestratorService {
     }
 
     private void aplicarResultado(ObjectNode observation, JsonNode resultado) {
-        boolean numerico = resultado != null && resultado.isNumber();
+        if (resultado == null) {
+            // Preserva o valor já gerado pelo motor de conversão (ex: mapeamento customizado de $.valor para valueQuantity)
+            return;
+        }
+
+        boolean numerico = resultado.isNumber();
         var camposRemovidos = observation.propertyNames().stream()
                 .filter(campo -> campo.matches("_?value[A-Z].*"))
                 .filter(campo -> !numerico || !"valueQuantity".equals(campo))
@@ -232,7 +241,7 @@ public class ClinicalOrchestratorService {
             ObjectNode quantidade = observation.get("valueQuantity") instanceof ObjectNode mapeada
                     ? mapeada : observation.putObject("valueQuantity");
             quantidade.set("value", resultado);
-        } else if (resultado != null) {
+        } else {
             observation.set("valueString", resultado);
         }
     }

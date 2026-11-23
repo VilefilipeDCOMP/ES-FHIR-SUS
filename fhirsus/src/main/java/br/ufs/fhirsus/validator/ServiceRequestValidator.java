@@ -111,6 +111,26 @@ public class ServiceRequestValidator {
         JsonNode patientNode = patientEntry == null ? null : patientEntry.path("resource");
         String patientFullUrl = patientEntry == null ? null : patientEntry.path("fullUrl").asText(null);
         String serviceRequestFullUrl = serviceRequestEntry == null ? "" : serviceRequestEntry.path("fullUrl").asText("");
+
+        // Resolução de referências contidas (ex: contained Patient com id "p1" e subject.reference "#p1")
+        if (patientNode == null && subject != null && subject.isObject()) {
+            String ref = subject.path("reference").asText("");
+            if (ref.startsWith("#")) {
+                String targetId = ref.substring(1);
+                JsonNode contained = serviceRequestNode.path("contained");
+                if (contained.isArray()) {
+                    for (JsonNode rec : contained) {
+                        if ("Patient".equals(rec.path("resourceType").asText()) && targetId.equals(rec.path("id").asText(""))) {
+                            patientNode = rec;
+                            patientFullUrl = "urn:uuid:" + java.util.UUID.randomUUID();
+                            subject = ((tools.jackson.databind.node.ObjectNode) subject.deepCopy()).put("reference", patientFullUrl);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
         return new ValidClinicalInput(numeroPedido, codigoExame, subject, serviceRequestNode, serviceRequestFullUrl, patientNode, patientFullUrl);
     }
 

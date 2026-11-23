@@ -292,7 +292,9 @@ class ClinicalOrchestratorServiceTest {
                 .thenReturn(mapper.createObjectNode().put("valueBoolean", true).put("valueInteger", 1));
 
         ObjectNode laudo = mapper.createObjectNode();
-        laudo.putArray("laudo_itens").addObject().put("resultado", "Reagente");
+        laudo.putArray("laudo_itens").addObject()
+                .put("codigo_analise", "LAB-042")
+                .put("resultado", "Reagente");
         when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
 
         JsonNode pedido = mapper.readTree("""
@@ -304,5 +306,110 @@ class ClinicalOrchestratorServiceTest {
         assertEquals("Reagente", observation.path("valueString").asText());
         assertFalse(observation.has("valueBoolean"));
         assertFalse(observation.has("valueInteger"));
+    }
+
+    @Test
+    @DisplayName("PR Review: Deve rejeitar item do laudo laboratorial sem código de exame")
+    void deveRejeitarItemSemCodigoDeExame() {
+        ObjectNode laudo = mapper.createObjectNode();
+        laudo.put("status_execucao", "CONCLUIDO");
+        laudo.put("codigo_pedido", "PED-001");
+        laudo.putArray("laudo_itens").addObject().put("resultado_valor", "Reagente");
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
+
+        JsonNode pedido = mapper.readTree("""
+                {"resourceType":"ServiceRequest","id":"ped-1","code":{"text":"LAB-042"}}
+                """);
+
+        assertThrows(br.ufs.fhirsus.exception.InvalidPayloadException.class, () ->
+                service.processarFluxoCompleto(pedido));
+    }
+
+    @Test
+    @DisplayName("PR Review: Deve preservar valores gerados pelo motor (custom rules) quando resultado e resultado_valor forem ausentes")
+    void devePreservarValorGeradoPeloMotorQuandoAliasesForemAusentes() {
+        ConversionEngine engine = mock(ConversionEngine.class);
+        when(engine.converter(any(), eq("DiagnosticReport"), eq(SentidoConversao.TO_FHIR)))
+                .thenReturn(mapper.createObjectNode());
+        ObjectNode obsComValorCustomizado = mapper.createObjectNode();
+        obsComValorCustomizado.putObject("valueQuantity").put("value", 150.0);
+        when(engine.converter(any(), eq("Observation"), eq(SentidoConversao.TO_FHIR)))
+                .thenReturn(obsComValorCustomizado);
+
+        ObjectNode laudo = mapper.createObjectNode();
+        laudo.put("status_execucao", "CONCLUIDO");
+        laudo.put("codigo_pedido", "PED-001");
+        // Item com $.valor apenas, sem resultado nem resultado_valor
+        laudo.putArray("laudo_itens").addObject()
+                .put("codigo_analise", "EXAME-001")
+                .put("valor", 150.0);
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
+
+        JsonNode pedido = mapper.readTree("""
+                {"resourceType":"ServiceRequest","id":"ped-1","code":{"text":"EXAME-001"}}
+                """);
+        var orquestrador = new ClinicalOrchestratorService(new ServiceRequestValidator(), engine, labClient);
+
+        ObjectNode bundleRetorno = orquestrador.processarFluxoCompleto(pedido);
+        JsonNode obs = bundleRetorno.at("/entry/1/resource");
+
+        // O valor gerado pela regra customizada deve ser preservado, e não apagado
+        assertTrue(obs.has("valueQuantity"));
+        assertEquals(150.0, obs.at("/valueQuantity/value").asDouble());
+    }
+
+    @Test
+    @DisplayName("PR Review: Deve resolver paciente contido (#p1) em ServiceRequest isolado e reescrever referências")
+    void deveResolverPacienteContidoEmServiceRequestIsolado() {
+        ObjectNode laudo = mapper.createObjectNode();
+        laudo.put("status_execucao", "CONCLUIDO");
+        laudo.put("codigo_pedido", "PED-001");
+        laudo.putArray("laudo_itens").addObject()
+                .put("codigo_analise", "EXAME-001")
+                .put("resultado_valor", "95 mg/dL");
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(laudo);
+
+        JsonNode pedidoComContained = mapper.readTree("""
+                {
+                  "resourceType": "ServiceRequest",
+                  "id": "ped-contained-01",
+                  "contained": [
+                    {
+                      "resourceType": "Patient",
+                      "id": "p1",
+                      "identifier": [{ "value": "PAC-CONTAINED-01" }]
+                    }
+                  ],
+                  "subject": { "reference": "#p1" },
+                  "code": { "text": "EXAME-001" }
+                }
+                """);
+
+        ObjectNode bundleRetorno = service.processarFluxoCompleto(pedidoComContained);
+        assertNotNull(bundleRetorno);
+
+        JsonNode entries = bundleRetorno.path("entry");
+        JsonNode report = entries.get(0).path("resource");
+        JsonNode obs = entries.get(1).path("resource");
+
+        // O subject não deve ser "#p1" órfão
+        String refReport = report.at("/subject/reference").asText();
+        assertFalse(refReport.equals("#p1"), "A referência do subject não pode permanecer #p1 órfão");
+        assertTrue(refReport.startsWith("urn:uuid:"));
+
+        String refObs = obs.at("/subject/reference").asText();
+        assertEquals(refReport, refObs, "Observation e DiagnosticReport devem compartilhar a referência reescrita");
+
+        // O Bundle deve conter o recurso Patient resolvido
+        boolean temPacienteNoBundle = false;
+        for (JsonNode entry : entries) {
+            if ("Patient".equals(entry.at("/resource/resourceType").asText())) {
+                assertEquals(refReport, entry.path("fullUrl").asText());
+                assertEquals("p1", entry.at("/resource/id").asText());
+                temPacienteNoBundle = true;
+                break;
+            }
+        }
+        assertTrue(temPacienteNoBundle, "O paciente contido deve ser adicionado como entrada do Bundle de saída");
     }
 }
