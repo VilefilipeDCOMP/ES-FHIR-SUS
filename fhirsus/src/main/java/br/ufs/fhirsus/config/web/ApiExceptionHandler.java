@@ -12,7 +12,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = ConfigController.class)
 public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ConfigSintaxeException.class)

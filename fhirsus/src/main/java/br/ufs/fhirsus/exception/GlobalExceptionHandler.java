@@ -1,6 +1,8 @@
 package br.ufs.fhirsus.exception;
 
+import br.ufs.fhirsus.controller.ClinicalGatewayController;
 import br.ufs.fhirsus.dto.fhir.OperationOutcomeDto;
+import br.ufs.fhirsus.map.FalhaConversao;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -12,7 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * Converte falhas de validação, sintaxe e regras no formato FHIR
  * OperationOutcome padronizado.
  */
-@RestControllerAdvice
+@RestControllerAdvice(assignableTypes = ClinicalGatewayController.class)
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(InvalidPayloadException.class)
@@ -45,14 +47,22 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
     }
 
-    @ExceptionHandler(br.ufs.fhirsus.map.FalhaConversao.class)
-    public ResponseEntity<OperationOutcomeDto> handleFalhaConversaoMotorOficial(br.ufs.fhirsus.map.FalhaConversao ex) {
-        OperationOutcomeDto outcome = OperationOutcomeDto.of(
-                "error",
-                ex.getCodigo() != null ? ex.getCodigo().name() : "conversion_error",
-                ex.getMessage(),
-                ex.getCaminho() != null ? ex.getCaminho() : "conversion.engine"
-        );
+    @ExceptionHandler(FalhaConversao.class)
+    public ResponseEntity<OperationOutcomeDto> handleFalhaConversaoMotorOficial(FalhaConversao ex) {
+        FalhaConversao.Codigo codigo = ex.getCodigo();
+        String tipo = codigo == null ? "processing" : switch (codigo) {
+            case ENTRADA_INVALIDA -> "invalid";
+            case CAMPO_OBRIGATORIO -> "required";
+            case VALOR_INVALIDO -> "value";
+            case CODIGO_SEM_EQUIVALENCIA, REGRA_NAO_SUPORTADA -> "not-supported";
+            case CONFIGURACAO_INVALIDA, MAPEAMENTO_INEXISTENTE, CAMINHO_INVALIDO,
+                    DOMINIO_INEXISTENTE, DESTINO_CONFLITANTE -> "processing";
+        };
+        String diagnostico = codigo == null ? ex.getMessage() : "[" + codigo.name() + "] " + ex.getMessage();
+        if (ex.getCaminho() != null) {
+            diagnostico += " Caminho no mapeamento: " + ex.getCaminho();
+        }
+        OperationOutcomeDto outcome = OperationOutcomeDto.of("error", tipo, diagnostico, null);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
     }
 

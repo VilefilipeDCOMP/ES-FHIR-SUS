@@ -1,5 +1,7 @@
 package br.ufs.fhirsus.dto.fhir;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import java.util.List;
  //Representação do recurso HL7 FHIR R4 OperationOutcome para retornos de erro.
 
@@ -24,6 +26,6 @@ public record OperationOutcomeDto(
             String severity,
             String code,
             String diagnostics,
-            List<String> expression
+            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<String> expression
     ) {}
 }
