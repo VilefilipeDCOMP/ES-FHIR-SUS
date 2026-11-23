@@ -135,6 +135,7 @@ public class ClinicalOrchestratorService {
             diagnosticReport.set("subject", input.subject().deepCopy());
         }
 
+        diagnosticReport.putArray("basedOn").add(referenciaPedido(input));
         ArrayNode resultArray = diagnosticReport.putArray("result");
 
         // Adiciona DiagnosticReport como entry[0]
@@ -187,7 +188,24 @@ public class ClinicalOrchestratorService {
             entries.addObject().put("fullUrl", input.patientFullUrl()).set("resource", input.patientNode().deepCopy());
         }
 
+        if (input.serviceRequestFullUrl().startsWith("urn:")) {
+            entries.addObject().put("fullUrl", input.serviceRequestFullUrl())
+                    .set("resource", input.serviceRequestNode().deepCopy());
+        }
+
         return bundle;
+    }
+
+    private ObjectNode referenciaPedido(ServiceRequestValidator.ValidClinicalInput input) {
+        ObjectNode reference = objectMapper.createObjectNode();
+        if (!input.serviceRequestFullUrl().isBlank()) {
+            return reference.put("reference", input.serviceRequestFullUrl());
+        }
+        String id = input.serviceRequestNode().path("id").asText("");
+        if (!id.isBlank()) {
+            return reference.put("reference", "ServiceRequest/" + id);
+        }
+        return reference.set("identifier", input.serviceRequestNode().at("/identifier/0").deepCopy());
     }
 
     private JsonNode obterResultado(JsonNode item) {

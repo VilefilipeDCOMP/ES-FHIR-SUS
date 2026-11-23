@@ -112,7 +112,7 @@ class MotorConversaoAdapterTest {
         assertNotNull(report);
         assertEquals("DiagnosticReport", report.path("resourceType").asText());
         assertEquals("final", report.path("status").asText());
-        assertEquals("ServiceRequest/PED-001", report.at("/basedOn/0/reference").asText());
+        assertFalse(report.has("basedOn"));
     }
 
     @Test

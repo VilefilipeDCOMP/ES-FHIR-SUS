@@ -98,7 +98,7 @@ class GatewayScenariosTestSuiteTest {
                 .andExpect(jsonPath("$.type").value("collection"))
                 .andExpect(jsonPath("$.entry[0].resource.resourceType").value("DiagnosticReport"))
                 .andExpect(jsonPath("$.entry[0].resource.status").value("final"))
-                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].reference").value("ServiceRequest/PED-001"))
+                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].reference").value("urn:uuid:d24c3ced-2413-4dbd-9cd1-f389253e441e"))
                 .andExpect(jsonPath("$.entry[0].resource.subject.reference").value("urn:uuid:54814e57-6be4-4469-a052-7ce6aef6a1f2"))
                 .andExpect(jsonPath("$.entry[1].resource.resourceType").value("Observation"))
                 .andExpect(jsonPath("$.entry[1].resource.code.coding[0].code").value("EXAME-001"))
@@ -111,16 +111,36 @@ class GatewayScenariosTestSuiteTest {
     void cenario02_deveProcessarServiceRequestIsoladoComSucesso() throws Exception {
         when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(respostaLabSimulada());
 
-        String payload = carregarFixture("solicitacao-servicerequest-isolado.json");
+        ObjectNode payload = (ObjectNode) mapper.readTree(carregarFixture("solicitacao-servicerequest-isolado.json"));
+        payload.put("id", "sr-123");
+        ((ObjectNode) payload.at("/identifier/0")).put("value", "PED-001");
 
         clinicalMockMvc.perform(post("/api/v1/clinical/requests")
                 .contentType("application/fhir+json")
-                .content(payload))
+                .content(payload.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resourceType").value("Bundle"))
                 .andExpect(jsonPath("$.type").value("collection"))
                 .andExpect(jsonPath("$.entry[0].resource.resourceType").value("DiagnosticReport"))
+                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].reference").value("ServiceRequest/sr-123"))
                 .andExpect(jsonPath("$.entry[1].resource.resourceType").value("Observation"));
+    }
+
+    @Test
+    void devePreservarSistemaEValorQuandoPedidoSoTemIdentificadorDeNegocio() throws Exception {
+        ObjectNode pedido = (ObjectNode) mapper.readTree(carregarFixture("solicitacao-servicerequest-isolado.json"));
+        pedido.remove("id");
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong()))
+                .thenReturn(respostaLabSimulada().put("codigo_pedido", "PED-002"));
+
+        clinicalMockMvc.perform(post("/api/v1/clinical/requests")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(pedido.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].reference").doesNotExist())
+                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].identifier.system")
+                        .value("https://clinica.example/identificadores/pedidos"))
+                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].identifier.value").value("PED-002"));
     }
 
     @Test
@@ -269,7 +289,7 @@ class GatewayScenariosTestSuiteTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resourceType").value("Bundle"))
                 .andExpect(jsonPath("$.type").value("collection"))
-                .andExpect(jsonPath("$.entry.length()").value(5))
+                .andExpect(jsonPath("$.entry.length()").value(6))
                 .andExpect(jsonPath("$.entry[0].resource.resourceType").value("DiagnosticReport"))
                 .andExpect(jsonPath("$.entry[0].resource.result.length()").value(3))
                 .andExpect(jsonPath("$.entry[1].resource.resourceType").value("Observation"))
@@ -281,6 +301,7 @@ class GatewayScenariosTestSuiteTest {
                 .andExpect(jsonPath("$.entry[3].resource.resourceType").value("Observation"))
                 .andExpect(jsonPath("$.entry[3].resource.code.coding[0].code").value("HDL"))
                 .andExpect(jsonPath("$.entry[3].resource.valueString").value("55 mg/dL"))
-                .andExpect(jsonPath("$.entry[4].resource.resourceType").value("Patient"));
+                .andExpect(jsonPath("$.entry[4].resource.resourceType").value("Patient"))
+                .andExpect(jsonPath("$.entry[5].resource.resourceType").value("ServiceRequest"));
     }
 }

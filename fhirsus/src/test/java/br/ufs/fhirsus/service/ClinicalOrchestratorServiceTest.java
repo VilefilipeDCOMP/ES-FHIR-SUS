@@ -90,7 +90,7 @@ class ClinicalOrchestratorServiceTest {
         assertEquals("collection", bundleRetorno.path("type").asText());
 
         JsonNode entries = bundleRetorno.path("entry");
-        assertEquals(3, entries.size());
+        assertEquals(4, entries.size());
         assertEquals("urn:uuid:paciente-01", entries.get(2).path("fullUrl").asText());
 
         // Validação da entry[0]: DiagnosticReport
@@ -99,7 +99,9 @@ class ClinicalOrchestratorServiceTest {
         JsonNode report = reportEntry.path("resource");
         assertEquals("DiagnosticReport", report.path("resourceType").asText());
         assertEquals("final", report.path("status").asText());
-        assertEquals("ServiceRequest/PED-001", report.path("basedOn").get(0).path("reference").asText());
+        assertEquals("urn:uuid:pedido-01", report.at("/basedOn/0/reference").asText());
+        assertEquals(report.at("/basedOn/0/reference").asText(), entries.get(3).path("fullUrl").asText());
+        assertEquals(payloadEntrada.at("/entry/0/resource"), entries.get(3).path("resource"));
         assertEquals("urn:uuid:paciente-01", report.path("subject").path("reference").asText());
 
         // Validação da entry[1]: Observation
@@ -254,7 +256,7 @@ class ClinicalOrchestratorServiceTest {
         assertNotNull(bundleRetorno);
 
         JsonNode entries = bundleRetorno.path("entry");
-        assertEquals(7, entries.size(), "1 DiagnosticReport + 6 Observations");
+        assertEquals(8, entries.size(), "1 DiagnosticReport + 6 Observations + 1 ServiceRequest");
 
         // Checa as 3 observations
         JsonNode obs1 = entries.get(1).path("resource");

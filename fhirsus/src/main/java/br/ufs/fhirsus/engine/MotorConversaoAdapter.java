@@ -49,7 +49,7 @@ public class MotorConversaoAdapter implements ConversionEngine {
     public ObjectNode converter(JsonNode payload, String recurso, SentidoConversao sentido) {
         // Se for o recurso envelope DiagnosticReport, monta o cabeçalho FHIR R4 correspondente
         if ("DiagnosticReport".equalsIgnoreCase(recurso)) {
-            return construirDiagnosticReport(payload);
+            return construirDiagnosticReport();
         }
 
         JsonNode payloadParaMotor = normalizarPayload(payload, recurso, sentido);
@@ -105,7 +105,7 @@ public class MotorConversaoAdapter implements ConversionEngine {
         return payload;
     }
 
-    private ObjectNode construirDiagnosticReport(JsonNode labResp) {
+    private ObjectNode construirDiagnosticReport() {
         ObjectNode dr = JSON_MAPPER.createObjectNode();
         dr.put("resourceType", "DiagnosticReport");
         dr.put("status", "final");
@@ -116,13 +116,6 @@ public class MotorConversaoAdapter implements ConversionEngine {
         codingItem.put("system", "https://clinica.example/codigos/laudos");
         codingItem.put("code", "LAUDO-PADRAO-P3");
         codingItem.put("display", "Relatório de Resultados Laboratoriais P3");
-
-        ArrayNode basedOn = dr.putArray("basedOn");
-        String numPedido = labResp != null ? labResp.path("codigo_pedido").asText(null) : null;
-        if (numPedido == null && labResp != null) {
-            numPedido = labResp.path("numeroPedido").asText("PED-001");
-        }
-        basedOn.addObject().put("reference", "ServiceRequest/" + (numPedido != null ? numPedido : "PED-001"));
 
         return dr;
     }

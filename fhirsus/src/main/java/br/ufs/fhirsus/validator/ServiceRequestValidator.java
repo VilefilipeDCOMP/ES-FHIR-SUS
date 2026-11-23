@@ -33,6 +33,7 @@ public class ServiceRequestValidator {
             String codigoExame,
             JsonNode subject,
             JsonNode serviceRequestNode,
+            String serviceRequestFullUrl,
             JsonNode patientNode,
             String patientFullUrl
     ) {}
@@ -64,6 +65,7 @@ public class ServiceRequestValidator {
         }
 
         JsonNode serviceRequestNode = null;
+        JsonNode serviceRequestEntry = null;
         JsonNode patientEntry = null;
 
         if ("Bundle".equalsIgnoreCase(resourceType)) {
@@ -72,7 +74,6 @@ public class ServiceRequestValidator {
                 throw new FhirValidationException("Bundle sem entradas clínicas ('entry')", "Bundle.entry", "required");
             }
 
-            JsonNode serviceRequestEntry = null;
             for (JsonNode entry : entries) {
                 JsonNode resource = entry.path("resource");
                 if ("ServiceRequest".equals(resource.path("resourceType").asText())) {
@@ -109,7 +110,8 @@ public class ServiceRequestValidator {
         JsonNode subject = serviceRequestNode.get("subject");
         JsonNode patientNode = patientEntry == null ? null : patientEntry.path("resource");
         String patientFullUrl = patientEntry == null ? null : patientEntry.path("fullUrl").asText(null);
-        return new ValidClinicalInput(numeroPedido, codigoExame, subject, serviceRequestNode, patientNode, patientFullUrl);
+        String serviceRequestFullUrl = serviceRequestEntry == null ? "" : serviceRequestEntry.path("fullUrl").asText("");
+        return new ValidClinicalInput(numeroPedido, codigoExame, subject, serviceRequestNode, serviceRequestFullUrl, patientNode, patientFullUrl);
     }
 
     private JsonNode resolverPaciente(JsonNode entries, JsonNode serviceRequestEntry) {

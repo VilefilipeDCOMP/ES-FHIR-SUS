@@ -112,7 +112,7 @@ class ClinicalGatewayControllerTest {
                 .andExpect(jsonPath("$.resourceType").value("Bundle"))
                 .andExpect(jsonPath("$.type").value("collection"))
                 .andExpect(jsonPath("$.entry[0].resource.resourceType").value("DiagnosticReport"))
-                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].reference").value("ServiceRequest/PED-001"))
+                .andExpect(jsonPath("$.entry[0].resource.basedOn[0].reference").value("urn:uuid:d24c3ced-2413-4dbd-9cd1-f389253e441e"))
                 .andExpect(jsonPath("$.entry[0].resource.subject.reference").value("urn:uuid:54814e57-6be4-4469-a052-7ce6aef6a1f2"))
                 .andExpect(jsonPath("$.entry[1].resource.resourceType").value("Observation"))
                 .andExpect(jsonPath("$.entry[1].resource.valueString").value("99 mg/dL"))
