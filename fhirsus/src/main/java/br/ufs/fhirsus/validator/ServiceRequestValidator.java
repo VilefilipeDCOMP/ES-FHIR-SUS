@@ -1,5 +1,6 @@
 package br.ufs.fhirsus.validator;
 
+import br.ufs.fhirsus.exception.FhirStructuralValidationException;
 import br.ufs.fhirsus.exception.FhirValidationException;
 import br.ufs.fhirsus.exception.InvalidPayloadException;
 import br.ufs.fhirsus.validacao.ValidadorFhir;
@@ -45,7 +46,7 @@ public class ServiceRequestValidator {
 
         String resourceType = root.path("resourceType").asText(null);
         if (resourceType == null || resourceType.isBlank()) {
-            throw new FhirValidationException("Campo 'resourceType' obrigatório ausente no payload", "resourceType", "required");
+            throw new FhirStructuralValidationException("Campo 'resourceType' obrigatório ausente no payload", "resourceType", "required");
         }
 
         // Validação semântica e estrutural via HAPI FHIR R4 (quando disponível)
@@ -56,7 +57,7 @@ public class ServiceRequestValidator {
                         .filter(m -> m.getSeverity() == ca.uhn.fhir.validation.ResultSeverityEnum.ERROR)
                         .findFirst()
                         .orElse(resultadoFhir.getMessages().get(0));
-                throw new FhirValidationException(
+                throw new FhirStructuralValidationException(
                         primeiroErro.getMessage(),
                         primeiroErro.getLocationString() != null ? primeiroErro.getLocationString() : resourceType,
                         "structure"

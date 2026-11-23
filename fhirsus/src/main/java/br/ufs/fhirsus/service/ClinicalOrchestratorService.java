@@ -2,9 +2,11 @@ package br.ufs.fhirsus.service;
 
 import br.ufs.fhirsus.client.LabLegacyClient;
 import br.ufs.fhirsus.engine.ConversionEngine;
+import br.ufs.fhirsus.exception.InvalidClinicalOutputException;
 import br.ufs.fhirsus.map.SentidoConversao;
 import br.ufs.fhirsus.validacao.ValidadorFhir;
 import br.ufs.fhirsus.validator.ServiceRequestValidator;
+import ca.uhn.fhir.validation.ResultSeverityEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -114,11 +116,19 @@ public class ClinicalOrchestratorService {
 
         if (validadorFhir != null) {
             var validacaoSaida = validadorFhir.validar(bundleFinal.toString(), "Bundle");
-            if (validacaoSaida.isSuccessful()) {
-                log.info("[FILTRO 5 - CERTIFICACAO FHIR]: Bundle R4 collection certificado com sucesso pelo HAPI FHIR Validator!");
-            } else {
-                log.warn("[FILTRO 5 - ALERTA FHIR]: Bundle gerado possui observacoes no validador R4: {}", validacaoSaida.getMessages());
+            if (!validacaoSaida.isSuccessful()) {
+                var erro = validacaoSaida.getMessages().stream()
+                        .filter(m -> m.getSeverity() == ResultSeverityEnum.ERROR || m.getSeverity() == ResultSeverityEnum.FATAL)
+                        .findFirst()
+                        .orElse(null);
+                log.warn("[FILTRO 5 - CERTIFICACAO FHIR]: Bundle de laudo rejeitado pelo validador R4");
+                if (erro == null) {
+                    throw new InvalidClinicalOutputException("Bundle de laudo rejeitado pelo validador FHIR R4", "Bundle");
+                }
+                throw new InvalidClinicalOutputException(
+                        "Bundle de laudo inválido: " + erro.getMessage(), erro.getLocationString());
             }
+            log.info("[FILTRO 5 - CERTIFICACAO FHIR]: Bundle R4 collection certificado com sucesso pelo HAPI FHIR Validator!");
         }
         log.info("================================================================================");
         log.info(">>> [PIPELINE CONCLUIDO COM SUCESSO - DEVOLVENDO HTTP 200 A CLINICA]");

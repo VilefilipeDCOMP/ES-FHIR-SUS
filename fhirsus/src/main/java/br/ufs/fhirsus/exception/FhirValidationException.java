@@ -1,8 +1,8 @@
 package br.ufs.fhirsus.exception;
 
 /**
- * Exceção lançada quando a requisição for sintaticamente JSON válido, mas falhar na validação semântica FHIR
- * ou faltar campos obrigatórios do recorte (HTTP 422).
+ * Falha de validação na entrada clínica. O gateway retorna HTTP 422 para as regras do fluxo
+ * e HTTP 400 para falhas estruturais identificadas pela subclasse.
  */
 public class FhirValidationException extends RuntimeException {
     private final String campo;

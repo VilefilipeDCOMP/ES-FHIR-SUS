@@ -44,7 +44,9 @@ public class GlobalExceptionHandler {
                 ex.getCodigoErro(),
                 ex.getMessage(),
                 ex.getCampo());
-        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
+        HttpStatus status = ex instanceof FhirStructuralValidationException
+                ? HttpStatus.BAD_REQUEST : HttpStatus.UNPROCESSABLE_ENTITY;
+        return ResponseEntity.status(status).body(outcome);
     }
 
     @ExceptionHandler(FalhaConversao.class)
@@ -64,6 +66,12 @@ public class GlobalExceptionHandler {
         }
         OperationOutcomeDto outcome = OperationOutcomeDto.of("error", tipo, diagnostico, null);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(outcome);
+    }
+
+    @ExceptionHandler(InvalidClinicalOutputException.class)
+    public ResponseEntity<OperationOutcomeDto> handleInvalidClinicalOutput(InvalidClinicalOutputException ex) {
+        OperationOutcomeDto outcome = OperationOutcomeDto.of("error", "exception", ex.getMessage(), ex.getCampo());
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(outcome);
     }
 
     @ExceptionHandler(LabTimeoutException.class)
