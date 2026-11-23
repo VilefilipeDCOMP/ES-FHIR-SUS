@@ -30,6 +30,8 @@ import java.util.UUID;
 public class ClinicalOrchestratorService {
 
     private static final Logger log = LoggerFactory.getLogger(ClinicalOrchestratorService.class);
+    private static final java.util.regex.Pattern PATTERN_NUMERO_UNIDADE =
+            java.util.regex.Pattern.compile("^\\s*([+-]?\\d+(?:[.,]\\d+)?)\\s*(.*)$");
 
     private final ServiceRequestValidator validator;
     private final ConversionEngine conversionEngine;
@@ -156,17 +158,66 @@ public class ClinicalOrchestratorService {
                     String sit = item.path("status_analise").asText("LIBERADO");
                     itemNormalizado.put("situacao", sit);
                 }
-                if (!itemNormalizado.has("resultado")) {
-                    double val = item.path("resultado_valor").isNumber() ? item.path("resultado_valor").asDouble() : 99.0;
-                    itemNormalizado.put("resultado", val);
+
+                // Parse explícito de medições laboratoriais preservando valores reais
+                Double valorNumerico = null;
+                String unidade = null;
+                String textoOriginal = null;
+
+                if (item.hasNonNull("resultado") && item.path("resultado").isNumber()) {
+                    valorNumerico = item.path("resultado").asDouble();
                 }
+
+                if (item.hasNonNull("resultado_valor")) {
+                    if (item.path("resultado_valor").isNumber()) {
+                        if (valorNumerico == null) {
+                            valorNumerico = item.path("resultado_valor").asDouble();
+                        }
+                    } else {
+                        textoOriginal = item.path("resultado_valor").asText().trim();
+                        var matcher = PATTERN_NUMERO_UNIDADE.matcher(textoOriginal);
+                        if (matcher.matches()) {
+                            try {
+                                double parsed = Double.parseDouble(matcher.group(1).replace(',', '.'));
+                                if (valorNumerico == null) {
+                                    valorNumerico = parsed;
+                                }
+                                String u = matcher.group(2).trim();
+                                if (!u.isEmpty()) {
+                                    unidade = u;
+                                }
+                            } catch (NumberFormatException ignored) {}
+                        }
+                    }
+                }
+
+                if (valorNumerico != null) {
+                    itemNormalizado.put("resultado", valorNumerico);
+                } else if (!itemNormalizado.has("resultado")) {
+                    // Valor neutro para satisfazer regras configuradas que exigem campo resultado no motor
+                    itemNormalizado.put("resultado", 0.0);
+                }
+
                 String uuidObs = "urn:uuid:" + UUID.randomUUID();
                 ObjectNode observation = conversionEngine.converter(itemNormalizado, "Observation", SentidoConversao.TO_FHIR);
                 observation.put("id", uuidObs.replace("urn:uuid:", ""));
-                String valStr = item.path("resultado_valor").asText(null);
-                if (valStr != null && !observation.has("valueString")) {
-                    observation.put("valueString", valStr);
+
+                // FHIR R4: Apenas uma representação de Observation.value[x] (mutuamente exclusivos)
+                if (textoOriginal != null && !textoOriginal.isBlank()) {
+                    // Preserva o resultado textual original do laboratório sem manufaturar valores
+                    observation.remove("valueQuantity");
+                    observation.put("valueString", textoOriginal);
+                } else if (valorNumerico != null) {
+                    observation.remove("valueString");
+                    ObjectNode valQuantity = observation.has("valueQuantity") && observation.get("valueQuantity").isObject()
+                            ? (ObjectNode) observation.get("valueQuantity")
+                            : observation.putObject("valueQuantity");
+                    valQuantity.put("value", valorNumerico);
+                    if (unidade != null && !unidade.isBlank()) {
+                        valQuantity.put("unit", unidade);
+                    }
                 }
+
                 if (input.pacienteCodigo() != null) {
                     ObjectNode subjectNode = observation.putObject("subject");
                     subjectNode.put("reference", "Patient/" + input.pacienteCodigo());

@@ -113,5 +113,153 @@ class ClinicalOrchestratorServiceTest {
         String obsFullUrl = obsEntry.path("fullUrl").asText();
         assertEquals(obsFullUrl, report.path("result").get(0).path("reference").asText(),
                 "DiagnosticReport.result deve apontar para o fullUrl da Observation gerada");
+
+        // Verifica regra FHIR R4: Apenas uma representação de value[x]
+        assertFalse(observation.has("valueQuantity"), "Observation com valueString não deve emitir valueQuantity concorrente");
+    }
+
+    @Test
+    @DisplayName("PR Review 2: Deve resolver o paciente solicitado (Patient/p1) mesmo com múltiplos Patients e fullUrls absolutos")
+    void deveResolverPacienteCorretoComMultiplosPatientsEReferenciaRelativa() {
+        ObjectNode labResponse = mapper.createObjectNode();
+        labResponse.put("status_execucao", "CONCLUIDO");
+        labResponse.put("codigo_pedido", "PED-002");
+        var itens = labResponse.putArray("laudo_itens");
+        ObjectNode item = itens.addObject();
+        item.put("codigo_analise", "GLICOSE-01");
+        item.put("resultado_valor", "100 mg/dL");
+
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(labResponse);
+
+        String bundleMultiplosPacientes = """
+                {
+                  "resourceType": "Bundle",
+                  "type": "collection",
+                  "entry": [
+                    {
+                      "fullUrl": "urn:uuid:sr-01",
+                      "resource": {
+                        "resourceType": "ServiceRequest",
+                        "identifier": [{ "value": "PED-002" }],
+                        "status": "active",
+                        "intent": "order",
+                        "code": { "coding": [{ "code": "GLICOSE-01" }] },
+                        "subject": { "reference": "Patient/p1" }
+                      }
+                    },
+                    {
+                      "fullUrl": "http://hospital.example/fhir/Patient/p1",
+                      "resource": {
+                        "resourceType": "Patient",
+                        "id": "p1",
+                        "identifier": [{ "value": "PAC-CORRETO-01" }]
+                      }
+                    },
+                    {
+                      "fullUrl": "http://hospital.example/fhir/Patient/p2",
+                      "resource": {
+                        "resourceType": "Patient",
+                        "id": "p2",
+                        "identifier": [{ "value": "PAC-INCORRETO-02" }]
+                      }
+                    }
+                  ]
+                }
+                """;
+
+        JsonNode payloadEntrada;
+        try {
+            payloadEntrada = mapper.readTree(bundleMultiplosPacientes);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        ObjectNode bundleRetorno = service.processarFluxoCompleto(payloadEntrada);
+        assertNotNull(bundleRetorno);
+
+        JsonNode entries = bundleRetorno.path("entry");
+        JsonNode report = entries.get(0).path("resource");
+        JsonNode obs = entries.get(1).path("resource");
+
+        // O subject deve ser o paciente solicitado p1 (PAC-CORRETO-01), nunca o último do loop (PAC-INCORRETO-02)
+        assertEquals("Patient/PAC-CORRETO-01", report.path("subject").path("reference").asText());
+        assertEquals("Patient/PAC-CORRETO-01", obs.path("subject").path("reference").asText());
+    }
+
+    @Test
+    @DisplayName("PR Review 1 & 3: Deve preservar resultados textuais reais, não substituir por 99 e emitir apenas um value[x]")
+    void devePreservarResultadosTextuaisSemSubstituirPor99EEmitirApenasUmValue() {
+        ObjectNode labResponse = mapper.createObjectNode();
+        labResponse.put("status_execucao", "CONCLUIDO");
+        labResponse.put("codigo_pedido", "PED-003");
+        var itens = labResponse.putArray("laudo_itens");
+
+        ObjectNode item1 = itens.addObject();
+        item1.put("codigo_analise", "GLICOSE-01");
+        item1.put("resultado_valor", "95 mg/dL");
+
+        ObjectNode item2 = itens.addObject();
+        item2.put("codigo_analise", "COLESTEROL-TOTAL");
+        item2.put("resultado_valor", "180 mg/dL");
+
+        ObjectNode item3 = itens.addObject();
+        item3.put("codigo_analise", "HDL");
+        item3.put("resultado_valor", "55 mg/dL");
+
+        when(labClient.enviarPedidoLegado(any(), anyBoolean(), anyLong())).thenReturn(labResponse);
+
+        String bundleEntrada = """
+                {
+                  "resourceType": "Bundle",
+                  "type": "collection",
+                  "entry": [
+                    {
+                      "fullUrl": "urn:uuid:sr-03",
+                      "resource": {
+                        "resourceType": "ServiceRequest",
+                        "identifier": [{ "value": "PED-003" }],
+                        "status": "active",
+                        "intent": "order",
+                        "code": { "coding": [{ "code": "GLICOSE-01" }] },
+                        "subject": { "reference": "Patient/p3" }
+                      }
+                    },
+                    {
+                      "fullUrl": "urn:uuid:p3",
+                      "resource": {
+                        "resourceType": "Patient",
+                        "id": "p3",
+                        "identifier": [{ "value": "PAC-003" }]
+                      }
+                    }
+                  ]
+                }
+                """;
+
+        JsonNode payloadEntrada;
+        try {
+            payloadEntrada = mapper.readTree(bundleEntrada);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        ObjectNode bundleRetorno = service.processarFluxoCompleto(payloadEntrada);
+        assertNotNull(bundleRetorno);
+
+        JsonNode entries = bundleRetorno.path("entry");
+        assertEquals(4, entries.size(), "1 DiagnosticReport + 3 Observations");
+
+        // Checa as 3 observations
+        JsonNode obs1 = entries.get(1).path("resource");
+        assertEquals("95 mg/dL", obs1.path("valueString").asText());
+        assertFalse(obs1.has("valueQuantity"), "Não deve conter valueQuantity junto com valueString");
+
+        JsonNode obs2 = entries.get(2).path("resource");
+        assertEquals("180 mg/dL", obs2.path("valueString").asText());
+        assertFalse(obs2.has("valueQuantity"), "Não deve conter valueQuantity junto com valueString");
+
+        JsonNode obs3 = entries.get(3).path("resource");
+        assertEquals("55 mg/dL", obs3.path("valueString").asText());
+        assertFalse(obs3.has("valueQuantity"), "Não deve conter valueQuantity junto com valueString");
     }
 }

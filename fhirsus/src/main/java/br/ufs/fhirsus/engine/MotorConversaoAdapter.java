@@ -111,9 +111,13 @@ public class MotorConversaoAdapter implements ConversionEngine {
         String cod = payload.path("codigoExame").asText(payload.path("codigo_analise").asText("EXAME-001"));
         coding.put("code", cod);
 
-        ObjectNode valNode = obs.putObject("valueQuantity");
-        double val = payload.path("resultado").isNumber() ? payload.path("resultado").asDouble() : 99.0;
-        valNode.put("value", val);
+        if (payload.hasNonNull("resultado_valor")) {
+            obs.put("valueString", payload.get("resultado_valor").asText());
+        } else if (payload.hasNonNull("resultado") && payload.get("resultado").isNumber()) {
+            obs.putObject("valueQuantity").put("value", payload.get("resultado").asDouble());
+        } else if (payload.hasNonNull("resultado")) {
+            obs.put("valueString", payload.get("resultado").asText());
+        }
 
         return obs;
     }

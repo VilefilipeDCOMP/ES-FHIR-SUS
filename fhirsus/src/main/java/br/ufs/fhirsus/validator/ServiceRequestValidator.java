@@ -74,6 +74,9 @@ public class ServiceRequestValidator {
             }
 
             Map<String, JsonNode> resourcesByFullUrl = new HashMap<>();
+            java.util.List<JsonNode> patientResources = new java.util.ArrayList<>();
+            java.util.List<String> patientFullUrls = new java.util.ArrayList<>();
+
             for (JsonNode entry : entries) {
                 String fullUrl = entry.path("fullUrl").asText("");
                 JsonNode resource = entry.path("resource");
@@ -84,7 +87,8 @@ public class ServiceRequestValidator {
                 if ("ServiceRequest".equalsIgnoreCase(innerType)) {
                     serviceRequestNode = resource;
                 } else if ("Patient".equalsIgnoreCase(innerType)) {
-                    patientNode = resource;
+                    patientResources.add(resource);
+                    patientFullUrls.add(fullUrl);
                 }
             }
 
@@ -92,10 +96,63 @@ public class ServiceRequestValidator {
                 throw new FhirValidationException("Nenhum recurso ServiceRequest encontrado nas entradas do Bundle", "Bundle.entry.resource", "structure");
             }
 
-            String subjectRef = serviceRequestNode.path("subject").path("reference").asText("");
-            if (!subjectRef.isBlank() && resourcesByFullUrl.containsKey(subjectRef)) {
-                patientNode = resourcesByFullUrl.get(subjectRef);
+            String subjectRef = serviceRequestNode.path("subject").path("reference").asText(null);
+            if (subjectRef != null && !subjectRef.isBlank()) {
+                // 1. Busca por correspondência exata em fullUrl
+                if (resourcesByFullUrl.containsKey(subjectRef)) {
+                    JsonNode res = resourcesByFullUrl.get(subjectRef);
+                    if ("Patient".equalsIgnoreCase(res.path("resourceType").asText())) {
+                        patientNode = res;
+                    }
+                }
+
+                // 2. Se não encontrou por fullUrl exato, resolve referências relativas (ex: Patient/p1) ou por id
+                if (patientNode == null) {
+                    String targetId = subjectRef.startsWith("Patient/")
+                            ? subjectRef.substring("Patient/".length())
+                            : subjectRef;
+
+                    for (int i = 0; i < patientResources.size(); i++) {
+                        JsonNode pat = patientResources.get(i);
+                        String fUrl = patientFullUrls.get(i);
+
+                        // Correspondência por id do recurso Patient
+                        String patId = pat.path("id").asText("");
+                        if (!patId.isBlank() && (patId.equals(targetId) || patId.equals(subjectRef))) {
+                            patientNode = pat;
+                            break;
+                        }
+
+                        // Correspondência se fullUrl termina com o subjectRef ou targetId
+                        if (!fUrl.isBlank() && (fUrl.endsWith("/" + subjectRef) || fUrl.endsWith("/" + targetId) || fUrl.endsWith(subjectRef))) {
+                            patientNode = pat;
+                            break;
+                        }
+
+                        // Correspondência por identifier
+                        JsonNode identifiers = pat.path("identifier");
+                        if (identifiers.isArray()) {
+                            boolean matchFound = false;
+                            for (JsonNode ident : identifiers) {
+                                String val = ident.path("value").asText("");
+                                if (!val.isBlank() && (val.equals(targetId) || val.equals(subjectRef))) {
+                                    patientNode = pat;
+                                    matchFound = true;
+                                    break;
+                                }
+                            }
+                            if (matchFound) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            } else if (patientResources.size() == 1) {
+                // Se o ServiceRequest não informa subject.reference mas existe exatamente um Patient no Bundle
+                patientNode = patientResources.get(0);
             }
+            // NOTA: Se subjectRef foi informado e nenhum Patient correspondeu no Bundle,
+            // patientNode permanece null para evitar vincular a um paciente arbitrário.
 
         } else if ("ServiceRequest".equalsIgnoreCase(resourceType)) {
             serviceRequestNode = root;
@@ -114,7 +171,8 @@ public class ServiceRequestValidator {
             throw new FhirValidationException("Código do exame (code.coding.code) ausente no ServiceRequest", "ServiceRequest.code", "required");
         }
 
-        String pacienteCodigo = extrairCodigoPaciente(patientNode);
+        String subjectRefSolicitado = serviceRequestNode.path("subject").path("reference").asText(null);
+        String pacienteCodigo = extrairCodigoPaciente(patientNode, subjectRefSolicitado);
 
         return new ValidClinicalInput(numeroPedido, codigoExame, pacienteCodigo, serviceRequestNode, patientNode);
     }
@@ -134,13 +192,28 @@ public class ServiceRequestValidator {
         return sr.path("code").path("text").asText(null);
     }
 
-    private String extrairCodigoPaciente(JsonNode pat) {
-        if (pat == null || pat.isMissingNode()) {
-            return null;
+    private String extrairCodigoPaciente(JsonNode pat, String subjectRefSolicitado) {
+        if (pat != null && !pat.isMissingNode()) {
+            if (pat.has("identifier") && pat.get("identifier").isArray() && !pat.get("identifier").isEmpty()) {
+                String val = pat.get("identifier").get(0).path("value").asText(null);
+                if (val != null && !val.isBlank()) {
+                    return val;
+                }
+            }
+            String id = pat.path("id").asText(null);
+            if (id != null && !id.isBlank()) {
+                return id;
+            }
         }
-        if (pat.has("identifier") && pat.get("identifier").isArray() && !pat.get("identifier").isEmpty()) {
-            return pat.get("identifier").get(0).path("value").asText(null);
+        // Se não encontrou recurso Patient no Bundle mas o ServiceRequest tinha subject explícito
+        if (subjectRefSolicitado != null && !subjectRefSolicitado.isBlank()) {
+            if (subjectRefSolicitado.startsWith("Patient/")) {
+                return subjectRefSolicitado.substring("Patient/".length());
+            }
+            if (!subjectRefSolicitado.startsWith("urn:") && !subjectRefSolicitado.startsWith("http")) {
+                return subjectRefSolicitado;
+            }
         }
-        return pat.path("id").asText(null);
+        return null;
     }
 }
