@@ -1,7 +1,12 @@
 import type React from 'react';
-import type { ResultadoOperacao } from '../../types/ui';
+import type { AlvoNavegacaoErro, ResultadoOperacao } from '../../types/ui';
 
-export const ResultCard: React.FC<{ resultado: ResultadoOperacao | null }> = ({ resultado }) => {
+interface Props {
+  resultado: ResultadoOperacao | null;
+  onLocalizarErro?: (alvo: AlvoNavegacaoErro) => void;
+}
+
+export const ResultCard: React.FC<Props> = ({ resultado, onLocalizarErro }) => {
   if (!resultado) return null;
 
   return (
@@ -22,10 +27,28 @@ export const ResultCard: React.FC<{ resultado: ResultadoOperacao | null }> = ({ 
       </div>
 
       {resultado.erros.length > 0 && (
-        <ul className="list-disc pl-5 space-y-1 text-xs text-red-900">
+        <ul className="list-disc pl-5 space-y-1.5 text-xs text-red-900">
           {resultado.erros.map((err, idx) => (
-            <li key={idx}>
-              <strong>{err.local}:</strong> {err.motivo}
+            <li key={idx} className="flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <strong>{err.local}:</strong> {err.motivo}
+              </span>
+              {err.alvo && onLocalizarErro && (
+                <button
+                  type="button"
+                  onClick={() => onLocalizarErro(err.alvo!)}
+                  className="px-2 py-0.5 rounded bg-red-100 hover:bg-red-200 text-red-900 font-semibold border border-red-300 shrink-0"
+                >
+                  Localizar no editor
+                  {err.alvo.recurso
+                    ? ` (${err.alvo.recurso} · ${
+                        err.alvo.sentido === 'FHIR_PARA_LEGADO'
+                          ? 'FHIR → Legado'
+                          : 'Legado → FHIR'
+                      })`
+                    : ''}
+                </button>
+              )}
             </li>
           ))}
         </ul>

@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import type { MapeamentoConfig, RecursoFhir } from '../../types/domain';
 import type { CampoFhirSpec, ErroValidacao } from '../../types/ui';
 import { importarArquivoConfig } from '../../utils/jsonIngest';
+import { serializarConfigParaContrato } from '../../utils/mappingValidation';
 
 interface Props {
   config: MapeamentoConfig;
@@ -21,7 +22,7 @@ export const JsonPreviewTab: React.FC<Props> = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [modoImportacao, setModoImportacao] = useState<'ATIVAR' | 'RASCUNHO'>('ATIVAR');
-  const jsonTexto = JSON.stringify(config, null, 2);
+  const jsonTexto = JSON.stringify(serializarConfigParaContrato(config), null, 2);
 
   const baixarArquivo = () => {
     const blob = new Blob([jsonTexto], { type: 'application/json' });
@@ -60,7 +61,7 @@ export const JsonPreviewTab: React.FC<Props> = ({
     <div className="bg-white border rounded-lg overflow-hidden">
       <div className="p-3 border-b bg-slate-50 flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs font-semibold text-slate-700">
-          Prévia do MapeamentoConfig (JSON/YAML — regras suportadas: COPIAR e TABELA)
+          Prévia do MapeamentoConfig (JSON/YAML — tipos suportados: DIRETA, DOMINIO e CONSTANTE)
         </span>
         <div className="flex flex-wrap items-center gap-2">
           <input
