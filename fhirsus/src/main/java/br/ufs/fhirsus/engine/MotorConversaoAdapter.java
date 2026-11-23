@@ -77,13 +77,19 @@ public class MotorConversaoAdapter implements ConversionEngine {
                 continue;
             }
             List<RegraCampo> regras = new ArrayList<>(mapeamento.toFHIR());
-            for (int j = 0; j < regras.size(); j++) {
+            for (int j = regras.size() - 1; j >= 0; j--) {
                 RegraCampo regra = regras.get(j);
                 if (regra.getTipoConversao() == TipoConversao.DOMINIO
                         && "code.coding[0].code".equals(regra.getCaminhoDestino())
                         && falha.getCaminho().equals(regra.getCaminhoOrigem())) {
+                    // Remove a regra de code.coding[0].code com domínio (que falhou)
+                    // E também remove regras de system do mesmo coding que imporiam o namespace da clínica
+                    // O código do laboratório é emitido sem system para não declarar equivalência falsa.
                     regras.set(j, new RegraCampo(regra.getCaminhoOrigem(), regra.getCaminhoDestino(),
                             TipoConversao.DIRETA, null, regra.getObrigatorio()));
+                    // Remove qualquer regra que escreva code.coding[0].system para não poluir com namespace errado
+                    regras.removeIf(r -> "code.coding[0].system".equals(r.getCaminhoDestino())
+                            && r.getTipoConversao() == TipoConversao.CONSTANTE);
                     mapeamentos.set(i, new Mapeamento(mapeamento.recurso(), mapeamento.toLegado(), regras));
                     return new MapeamentoConfig(mapeamentos, config.dominios());
                 }

@@ -91,6 +91,17 @@ public class ClinicalOrchestratorService {
                 respostaLab.path("status_execucao").asText(),
                 respostaLab.path("numero_protocolo_lab").asText());
 
+        // Validação do envelope da resposta laboratorial
+        JsonNode laudoItens = respostaLab.path("laudo_itens");
+        if (laudoItens.isMissingNode() || laudoItens.isNull()) {
+            throw new br.ufs.fhirsus.exception.LabUnavailableException(
+                    "Resposta do laboratório não contém o campo 'laudo_itens'. Envelope inesperado ou resposta de erro.");
+        }
+        if (!laudoItens.isArray()) {
+            throw new br.ufs.fhirsus.exception.LabUnavailableException(
+                    "Campo 'laudo_itens' na resposta do laboratório não é uma lista. Formato inesperado.");
+        }
+
         // Filtros 4 & 5: Conversão Legado -> FHIR e Composição do Bundle final
         log.info("[FILTRO 4 - CONVERSAO LEGADO -> FHIR (CT-02)]: Transformando itens em Observation e DiagnosticReport");
         ObjectNode bundleFinal = montarBundleLaudoFinal(input, respostaLab);
@@ -224,23 +235,39 @@ public class ClinicalOrchestratorService {
         return valor.isNumber() ? valor : null;
     }
 
+    private static final java.util.Set<String> VALUE_X_FIELDS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "valueQuantity", "valueCodeableConcept", "valueString", "valueBoolean",
+            "valueInteger", "valueRange", "valueRatio", "valueSampledData",
+            "valueTime", "valueDateTime", "valuePeriod"
+    ));
+
     private void aplicarResultado(ObjectNode observation, JsonNode resultado) {
         if (resultado == null) {
-            // Preserva o valor já gerado pelo motor de conversão (ex: mapeamento customizado de $.valor para valueQuantity)
+            // Motor produziu valor via regra customizada — preserva tudo que ele gerou
             return;
         }
 
         boolean numerico = resultado.isNumber();
-        var camposRemovidos = observation.propertyNames().stream()
-                .filter(campo -> campo.matches("_?value[A-Z].*"))
-                .filter(campo -> !numerico || !"valueQuantity".equals(campo))
-                .toList();
-        observation.remove(camposRemovidos);
+        boolean motorProduziuValueQuantity = observation.has("valueQuantity") && observation.get("valueQuantity").isObject();
 
+        if (motorProduziuValueQuantity && numerico) {
+            // Motor gerou valueQuantity via regra configurada e o alias tem valor numérico:
+            // complementa o valueQuantity com o valor numérico se ainda não tiver, e remove outros value[x]
+            ObjectNode vq = (ObjectNode) observation.get("valueQuantity");
+            if (!vq.has("value")) {
+                vq.set("value", resultado);
+            }
+            // Remove outros value[x] incompatíveis (preserva valueQuantity)
+            VALUE_X_FIELDS.stream().filter(f -> !f.equals("valueQuantity")).forEach(observation::remove);
+            return;
+        }
+
+        // Remove todos os value[x] que o motor possa ter gerado (incluindo valueQuantity quando o alias é string)
+        VALUE_X_FIELDS.forEach(observation::remove);
+
+        // Aplica o alias como única representação
         if (numerico) {
-            ObjectNode quantidade = observation.get("valueQuantity") instanceof ObjectNode mapeada
-                    ? mapeada : observation.putObject("valueQuantity");
-            quantidade.set("value", resultado);
+            observation.putObject("valueQuantity").set("value", resultado);
         } else {
             observation.set("valueString", resultado);
         }
