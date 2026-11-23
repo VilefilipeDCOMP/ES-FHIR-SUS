@@ -3,9 +3,12 @@ package br.ufs.fhirsus.engine;
 import br.ufs.fhirsus.config.service.ConfigService;
 import br.ufs.fhirsus.map.DominioValores;
 import br.ufs.fhirsus.map.FalhaConversao;
+import br.ufs.fhirsus.map.Mapeamento;
 import br.ufs.fhirsus.map.MapeamentoConfig;
 import br.ufs.fhirsus.map.MotorConversao;
+import br.ufs.fhirsus.map.RegraCampo;
 import br.ufs.fhirsus.map.SentidoConversao;
+import br.ufs.fhirsus.map.TipoConversao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,12 +59,37 @@ public class MotorConversaoAdapter implements ConversionEngine {
         try {
             return motorConversao.converter(payloadParaMotor, recurso, sentido, config);
         } catch (FalhaConversao fc) {
-            if (fc.getCodigo() == FalhaConversao.Codigo.CODIGO_SEM_EQUIVALENCIA && sentido == SentidoConversao.TO_FHIR && "Observation".equals(recurso)) {
-                log.warn("[MOTOR ADAPTER] Código sem equivalência no sentido TO_FHIR. Construindo Observation padrão para o código do laboratório.");
-                return construirObservationPadrao(payload);
+            if (fc.getCodigo() != FalhaConversao.Codigo.CODIGO_SEM_EQUIVALENCIA
+                    || !"Observation".equals(recurso) || sentido != SentidoConversao.TO_FHIR) {
+                throw fc;
             }
-            throw fc;
+
+            MapeamentoConfig configComCodigoLocal = permitirCodigoLocal(config, fc);
+            return motorConversao.converter(payloadParaMotor, recurso, sentido, configComCodigoLocal);
         }
+    }
+
+    private MapeamentoConfig permitirCodigoLocal(MapeamentoConfig config, FalhaConversao falha) {
+        List<Mapeamento> mapeamentos = new ArrayList<>(config.mapeamentos());
+        for (int i = 0; i < mapeamentos.size(); i++) {
+            Mapeamento mapeamento = mapeamentos.get(i);
+            if (!"Observation".equals(mapeamento.recurso())) {
+                continue;
+            }
+            List<RegraCampo> regras = new ArrayList<>(mapeamento.toFHIR());
+            for (int j = 0; j < regras.size(); j++) {
+                RegraCampo regra = regras.get(j);
+                if (regra.getTipoConversao() == TipoConversao.DOMINIO
+                        && "code.coding[0].code".equals(regra.getCaminhoDestino())
+                        && falha.getCaminho().equals(regra.getCaminhoOrigem())) {
+                    regras.set(j, new RegraCampo(regra.getCaminhoOrigem(), regra.getCaminhoDestino(),
+                            TipoConversao.DIRETA, null, regra.getObrigatorio()));
+                    mapeamentos.set(i, new Mapeamento(mapeamento.recurso(), mapeamento.toLegado(), regras));
+                    return new MapeamentoConfig(mapeamentos, config.dominios());
+                }
+            }
+        }
+        throw falha;
     }
 
     private JsonNode normalizarPayload(JsonNode payload, String recurso, SentidoConversao sentido) {
@@ -97,29 +125,6 @@ public class MotorConversaoAdapter implements ConversionEngine {
         basedOn.addObject().put("reference", "ServiceRequest/" + (numPedido != null ? numPedido : "PED-001"));
 
         return dr;
-    }
-
-    private ObjectNode construirObservationPadrao(JsonNode payload) {
-        ObjectNode obs = JSON_MAPPER.createObjectNode();
-        obs.put("resourceType", "Observation");
-        obs.put("status", "final");
-
-        ObjectNode codeNode = obs.putObject("code");
-        ArrayNode codingArr = codeNode.putArray("coding");
-        ObjectNode coding = codingArr.addObject();
-        coding.put("system", "https://clinica.example/codigos/exames");
-        String cod = payload.path("codigoExame").asText(payload.path("codigo_analise").asText("EXAME-001"));
-        coding.put("code", cod);
-
-        if (payload.hasNonNull("resultado_valor")) {
-            obs.put("valueString", payload.get("resultado_valor").asText());
-        } else if (payload.hasNonNull("resultado") && payload.get("resultado").isNumber()) {
-            obs.putObject("valueQuantity").put("value", payload.get("resultado").asDouble());
-        } else if (payload.hasNonNull("resultado")) {
-            obs.put("valueString", payload.get("resultado").asText());
-        }
-
-        return obs;
     }
 
     public MapeamentoConfig obterConfiguracaoAtiva() {

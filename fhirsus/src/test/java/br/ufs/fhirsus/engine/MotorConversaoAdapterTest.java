@@ -69,6 +69,34 @@ class MotorConversaoAdapterTest {
     }
 
     @Test
+    void deveRejeitarStatusSemEquivalenciaComExameConhecidoOuLocal() {
+        for (String codigo : new String[]{"LAB-042", "LAB-LOCAL"}) {
+            ObjectNode item = JSON.createObjectNode()
+                    .put("codigoExame", codigo)
+                    .put("situacao", "PRELIMINAR")
+                    .put("resultado", 42.5);
+            FalhaConversao falha = assertThrows(FalhaConversao.class,
+                    () -> adapter.converter(item, "Observation", SentidoConversao.TO_FHIR));
+
+            assertEquals(FalhaConversao.Codigo.CODIGO_SEM_EQUIVALENCIA, falha.getCodigo());
+            assertEquals("$.situacao", falha.getCaminho());
+        }
+    }
+
+    @Test
+    void devePreservarCodigoLocalQuandoStatusTemEquivalencia() {
+        ObjectNode item = JSON.createObjectNode()
+                .put("codigoExame", "LAB-LOCAL")
+                .put("situacao", "LIBERADO")
+                .put("resultado", 42.5);
+
+        ObjectNode observation = adapter.converter(item, "Observation", SentidoConversao.TO_FHIR);
+
+        assertEquals("LAB-LOCAL", observation.at("/code/coding/0/code").asText());
+        assertEquals("final", observation.path("status").asText());
+    }
+
+    @Test
     @DisplayName("Deve construir cabeçalho do recurso envelope DiagnosticReport de forma resiliente")
     void deveConstruirDiagnosticReportResiliente() throws Exception {
         JsonNode respostaLab = JSON.readTree("""
