@@ -1,0 +1,25 @@
+{
+  "status_execucao": "CONCLUIDO",
+  "numero_protocolo_lab": "LAB-1732308909999",
+  "codigo_pedido": "PED-001",
+  "laudo_itens": [
+    {
+      "codigo_analise": "GLICOSE",
+      "resultado_valor": "95 mg/dL",
+      "status_analise": "FINAL",
+      "observacao_tecnica": "Glicemia em jejum normal"
+    },
+    {
+      "codigo_analise": "COLESTEROL-TOTAL",
+      "resultado_valor": "180 mg/dL",
+      "status_analise": "FINAL",
+      "observacao_tecnica": "Colesterol desejavel"
+    },
+    {
+      "codigo_analise": "HDL",
+      "resultado_valor": "55 mg/dL",
+      "status_analise": "FINAL",
+      "observacao_tecnica": "HDL adequado"
+    }
+  ]
+}
