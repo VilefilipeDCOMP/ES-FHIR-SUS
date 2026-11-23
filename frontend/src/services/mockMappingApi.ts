@@ -1,77 +1,186 @@
-import type { MapeamentoConfig, RecursoFhir } from '../types/domain';
+import type { MapeamentoConfig } from '../types/domain';
 import type { ErroValidacao } from '../types/ui';
-import type { MappingGateway } from './mappingGateway';
 import { FHIR_CATALOG } from '../data/fhirCatalog';
 import { validarConfiguracaoDesconhecida } from '../utils/configSchema';
+import {
+  analisarCaminhoDestino,
+  analisarCaminhoOrigem,
+  serializarConfigParaContrato,
+  type SegmentoCaminho,
+} from '../utils/mappingValidation';
+import type { MappingGateway } from './mappingGateway';
 
-const STORAGE_KEY = 'fhirsus_p3_demo_active_config_v3';
-const COLECOES_FHIR_CONHECIDAS = new Set([
-  'identifier',
-  'name',
-  'coding',
-  'telecom',
-  'address',
-]);
+const STORAGE_KEY = 'fhirsus_p3_demo_active_config_v4';
 
-function lerCaminho(obj: Record<string, unknown>, caminho: string): unknown {
-  const partes = caminho.split('.');
-  let atual: unknown = obj;
-  for (const parte of partes) {
-    if (atual == null || typeof atual !== 'object') return undefined;
-    if (Array.isArray(atual)) atual = atual[0];
-    if (atual == null || typeof atual !== 'object') return undefined;
-    if (!Object.prototype.hasOwnProperty.call(atual, parte)) return undefined;
-    atual = (atual as Record<string, unknown>)[parte];
-  }
-  return atual;
+function ehObjetoPlano(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v);
 }
 
-function escreverCaminhoFhir(
-  alvo: Record<string, unknown>,
-  recurso: RecursoFhir,
-  caminhoFhir: string,
-  valor: unknown
-) {
-  const relativo = caminhoFhir.startsWith(`${recurso}.`)
-    ? caminhoFhir.slice(recurso.length + 1)
-    : caminhoFhir;
-  const partes = relativo.split('.');
+function semValor(valor: unknown): boolean {
+  return (
+    valor === undefined ||
+    valor === null ||
+    (typeof valor === 'string' && valor.trim() === '')
+  );
+}
 
-  let cursor: Record<string, unknown> = alvo;
-  for (let i = 0; i < partes.length - 1; i++) {
-    const chave = partes[i]!;
-    if (COLECOES_FHIR_CONHECIDAS.has(chave)) {
-      if (!Array.isArray(cursor[chave])) cursor[chave] = [{}];
-      cursor = (cursor[chave] as Record<string, unknown>[])[0]!;
-    } else {
-      if (typeof cursor[chave] !== 'object' || cursor[chave] === null) {
-        cursor[chave] = {};
+function lerCaminhoJson(
+  raiz: Record<string, unknown>,
+  caminhoTexto: string
+): { ok: true; valor: unknown } | { ok: false; motivo: string } {
+  const analise = analisarCaminhoOrigem(caminhoTexto);
+  if (!analise.ok) {
+    return { ok: false, motivo: analise.erro ?? 'Sintaxe de caminho não suportada.' };
+  }
+
+  let atual: unknown = raiz;
+  for (const seg of analise.segmentos) {
+    if (atual === null || atual === undefined) {
+      return { ok: true, valor: atual };
+    }
+    if (seg.indice !== null) {
+      if (!Array.isArray(atual)) {
+        return {
+          ok: false,
+          motivo: 'A estrutura do JSON de origem é incompatível com o caminho (esperado array).',
+        };
       }
-      cursor = cursor[chave] as Record<string, unknown>;
+      atual = atual[seg.indice];
+    } else if (seg.campo !== null) {
+      if (!ehObjetoPlano(atual)) {
+        return {
+          ok: false,
+          motivo: 'A estrutura do JSON de origem é incompatível com o caminho (esperado objeto).',
+        };
+      }
+      atual = Object.prototype.hasOwnProperty.call(atual, seg.campo)
+        ? atual[seg.campo]
+        : undefined;
     }
   }
-  cursor[partes[partes.length - 1]!] = valor;
+  return { ok: true, valor: atual };
 }
 
-function escreverCaminhoLegado(
-  alvo: Record<string, unknown>,
-  caminho: string,
-  valor: unknown
-) {
-  const partes = caminho.split('.');
-  let cursor = alvo;
-  for (let i = 0; i < partes.length - 1; i++) {
-    const p = partes[i]!;
-    if (typeof cursor[p] !== 'object' || cursor[p] === null) cursor[p] = {};
-    cursor = cursor[p] as Record<string, unknown>;
+interface NoConstrucaoSaida {
+  filhos: Map<string, { seg: SegmentoCaminho; no: NoConstrucaoSaida }>;
+  terminal: boolean;
+  valor: unknown;
+}
+
+/**
+ * replica a construção de árvore JSON de SaidaJson.java (incluindo omissão de opcionais vazios
+ * e detecção de lacunas em arrays de saída em tempo de execução).
+ */
+function construirSaidaJson(
+  registros: Array<{ caminhoDestino: string; valor: unknown }>
+): { ok: true; objeto: Record<string, unknown> } | { ok: false; local: string; motivo: string } {
+  const raiz: NoConstrucaoSaida = { filhos: new Map(), terminal: false, valor: null };
+
+  for (const reg of registros) {
+    const analise = analisarCaminhoDestino(reg.caminhoDestino);
+    if (!analise.ok) {
+      return {
+        ok: false,
+        local: reg.caminhoDestino,
+        motivo: analise.erro ?? 'Sintaxe de caminho não suportada.',
+      };
+    }
+
+    let atual = raiz;
+    for (const seg of analise.segmentos) {
+      const primeiro = atual.filhos.values().next().value as
+        | { seg: SegmentoCaminho; no: NoConstrucaoSaida }
+        | undefined;
+      const tipoDiferente =
+        primeiro !== undefined && (primeiro.seg.indice !== null) !== (seg.indice !== null);
+      if (atual.terminal || tipoDiferente) {
+        return {
+          ok: false,
+          local: reg.caminhoDestino,
+          motivo: 'O destino é duplicado ou incompatível com outra regra.',
+        };
+      }
+      const chave = seg.indice !== null ? `[${seg.indice}]` : `.${seg.campo}`;
+      let entrada = atual.filhos.get(chave);
+      if (!entrada) {
+        entrada = { seg, no: { filhos: new Map(), terminal: false, valor: null } };
+        atual.filhos.set(chave, entrada);
+      }
+      atual = entrada.no;
+    }
+
+    if (atual.terminal || atual.filhos.size > 0) {
+      return {
+        ok: false,
+        local: reg.caminhoDestino,
+        motivo: 'O destino é duplicado ou incompatível com outra regra.',
+      };
+    }
+
+    atual.terminal = true;
+    atual.valor = reg.valor;
   }
-  cursor[partes[partes.length - 1]!] = valor;
+
+  const materializarNo = (
+    no: NoConstrucaoSaida,
+    caminhoAtual: string
+  ): { ok: true; valor: unknown } | { ok: false; local: string; motivo: string } => {
+    if (no.terminal) {
+      return { ok: true, valor: no.valor === null ? null : structuredClone(no.valor) };
+    }
+    if (no.filhos.size === 0) {
+      return { ok: true, valor: null };
+    }
+    const entradas = [...no.filhos.values()];
+    const ehArray = entradas[0]?.seg.indice !== null;
+
+    if (ehArray) {
+      entradas.sort((a, b) => (a.seg.indice ?? 0) - (b.seg.indice ?? 0));
+      const arr: unknown[] = [];
+      for (const entrada of entradas) {
+        const idx = entrada.seg.indice ?? 0;
+        const dest = `${caminhoAtual}[${idx}]`;
+        const filhoRes = materializarNo(entrada.no, dest);
+        if (!filhoRes.ok) return filhoRes;
+        if (filhoRes.valor !== null) {
+          if (idx !== arr.length) {
+            return {
+              ok: false,
+              local: dest,
+              motivo: 'O índice deixaria uma lacuna no array de destino.',
+            };
+          }
+          arr.push(filhoRes.valor);
+        }
+      }
+      return { ok: true, valor: arr.length === 0 ? null : arr };
+    }
+
+    const obj: Record<string, unknown> = {};
+    for (const entrada of entradas) {
+      const campo = entrada.seg.campo ?? '';
+      const dest = caminhoAtual ? `${caminhoAtual}.${campo}` : campo;
+      const filhoRes = materializarNo(entrada.no, dest);
+      if (!filhoRes.ok) return filhoRes;
+      if (filhoRes.valor !== null) {
+        obj[campo] = filhoRes.valor;
+      }
+    }
+    return { ok: true, valor: Object.keys(obj).length === 0 ? null : obj };
+  };
+
+  const resRaiz = materializarNo(raiz, '');
+  if (!resRaiz.ok) return resRaiz;
+  return {
+    ok: true,
+    objeto: ehObjetoPlano(resRaiz.valor) ? resRaiz.valor : {},
+  };
 }
 
 const AVISO_MOCK: ErroValidacao = {
   local: 'Modo Mock Local',
   motivo:
-    'Executando sem o motor Java: esta simulação serve apenas para testes de interface e NÃO comprova conformidade HAPI FHIR R4 nem atomicidade no servidor.',
+    'Executando simulação local fiel ao MotorConversao (DIRETA, DOMINIO, CONSTANTE). A validação oficial HAPI FHIR R4 ocorre no servidor Java.',
   severidade: 'AVISO',
 };
 
@@ -123,28 +232,34 @@ export function criarMockMappingApi(configPadrao: MapeamentoConfig): MappingGate
         };
       }
 
-      // fail-closed: exige mapeamento e sentido explicitamente configurados com regras
       const map = config.mapeamentos.find((m) => m.recurso === recurso);
-      const s = map?.sentidos.find((item) => item.tipo === sentido);
-      if (!map || !s || s.regras.length === 0) {
+      const regras =
+        sentido === 'LEGADO_PARA_FHIR' ? (map?.toFHIR ?? []) : (map?.toLegado ?? []);
+      const listaNome = sentido === 'LEGADO_PARA_FHIR' ? 'toFHIR' : 'toLegado';
+
+      if (!map || regras.length === 0) {
         return {
           acao: 'TESTAR',
           sucesso: false,
           timestamp: new Date().toISOString(),
-          mensagemResumo: `Nenhum mapeamento configurado para ${recurso} (${sentido}).`,
+          mensagemResumo: `MAPEAMENTO_INEXISTENTE: Nenhuma regra configurada para ${recurso}.${listaNome}.`,
           erros: [
             {
-              local: `${recurso} > ${sentido}`,
-              motivo:
-                'Não há regras configuradas para este recurso e sentido. Nenhuma conversão foi executada.',
+              local: `${recurso}.${listaNome}`,
+              motivo: 'Não há regras para o sentido solicitado (MAPEAMENTO_INEXISTENTE).',
               severidade: 'ERRO',
+              alvo: { recurso, sentido },
             },
           ],
           avisos: [AVISO_MOCK],
         };
       }
 
-      if (sentido === 'FHIR_PARA_LEGADO' && exemploJson.resourceType !== recurso) {
+      if (
+        sentido === 'FHIR_PARA_LEGADO' &&
+        exemploJson.resourceType !== undefined &&
+        exemploJson.resourceType !== recurso
+      ) {
         return {
           acao: 'TESTAR',
           sucesso: false,
@@ -153,7 +268,7 @@ export function criarMockMappingApi(configPadrao: MapeamentoConfig): MappingGate
           erros: [
             {
               local: `${recurso} > resourceType`,
-              motivo: `Esperado resourceType="${recurso}", recebido "${String(exemploJson.resourceType ?? 'ausente')}".`,
+              motivo: `Esperado resourceType="${recurso}", recebido "${String(exemploJson.resourceType)}".`,
               severidade: 'ERRO',
             },
           ],
@@ -162,80 +277,157 @@ export function criarMockMappingApi(configPadrao: MapeamentoConfig): MappingGate
       }
 
       const erros: ErroValidacao[] = [];
-      const saida: Record<string, unknown> =
-        sentido === 'LEGADO_PARA_FHIR' ? { resourceType: recurso } : {};
-      let camposConvertidos = 0;
+      const registrosSaida: Array<{ caminhoDestino: string; valor: unknown }> = [];
 
-      for (const regra of s.regras) {
-        const caminhoLeitura =
-          sentido === 'FHIR_PARA_LEGADO' && regra.caminhoOrigem.startsWith(`${recurso}.`)
-            ? regra.caminhoOrigem.slice(recurso.length + 1)
-            : regra.caminhoOrigem;
+      regras.forEach((regra, idx) => {
+        const localRegra = `${recurso}.${listaNome}[${idx}]`;
 
-        const bruto = lerCaminho(exemploJson, caminhoLeitura);
-        if (bruto === undefined) {
+        if (regra.tipoConversao === 'CONSTANTE') {
+          const valConst = regra.parametroConversao;
+          if (semValor(valConst)) {
+            if (regra.obrigatorio) {
+              erros.push({
+                local: `${localRegra} (${regra.caminhoDestino})`,
+                motivo: 'O campo obrigatório ficou sem valor (CAMPO_OBRIGATORIO).',
+                severidade: 'ERRO',
+                alvo: { recurso, sentido, indiceRegra: idx, caminhoDestino: regra.caminhoDestino },
+              });
+            }
+            registrosSaida.push({ caminhoDestino: regra.caminhoDestino, valor: null });
+          } else {
+            registrosSaida.push({
+              caminhoDestino: regra.caminhoDestino,
+              valor: String(valConst),
+            });
+          }
+          return;
+        }
+
+        const leitura = lerCaminhoJson(exemploJson, regra.caminhoOrigem);
+        if (!leitura.ok) {
+          erros.push({
+            local: `${localRegra} (${regra.caminhoOrigem})`,
+            motivo: leitura.motivo,
+            severidade: 'ERRO',
+            alvo: { recurso, sentido, indiceRegra: idx, caminhoDestino: regra.caminhoDestino },
+          });
+          return;
+        }
+
+        const bruto = leitura.valor;
+        if (semValor(bruto)) {
           if (regra.obrigatorio) {
             erros.push({
-              local: `${recurso} > ${regra.caminhoOrigem}`,
-              motivo: 'Valor ausente no JSON de entrada para campo obrigatório.',
+              local: `${localRegra} (${regra.caminhoDestino})`,
+              motivo: 'O campo obrigatório ficou sem valor (CAMPO_OBRIGATORIO).',
               severidade: 'ERRO',
+              alvo: { recurso, sentido, indiceRegra: idx, caminhoDestino: regra.caminhoDestino },
             });
           }
-          continue;
+          registrosSaida.push({ caminhoDestino: regra.caminhoDestino, valor: null });
+          return;
         }
 
-        let convertido: unknown = bruto;
-        if (regra.regra.startsWith('TABELA:')) {
-          const nomeTabela = regra.regra.slice('TABELA:'.length);
-          const tab = config.tabelas.find((t) => t.nome === nomeTabela);
-          const chave = String(bruto);
-          convertido =
-            tab && Object.prototype.hasOwnProperty.call(tab.equivalencia, chave)
-              ? tab.equivalencia[chave]
-              : undefined;
-          if (convertido === undefined) {
-            erros.push({
-              local: `${recurso} > ${regra.caminhoOrigem} -> ${regra.caminhoDestino}`,
-              motivo: `Valor "${String(bruto)}" não encontrado na tabela "${nomeTabela}" (OperationOutcome simulado).`,
-              severidade: 'ERRO',
-            });
-            continue;
-          }
+        if (regra.tipoConversao === 'DIRETA') {
+          registrosSaida.push({ caminhoDestino: regra.caminhoDestino, valor: bruto });
+          return;
         }
 
-        if (sentido === 'LEGADO_PARA_FHIR') {
-          escreverCaminhoFhir(saida, recurso, regra.caminhoDestino, convertido);
-        } else {
-          escreverCaminhoLegado(saida, regra.caminhoDestino, convertido);
+        // DOMINIO
+        if (typeof bruto !== 'string') {
+          erros.push({
+            local: `${localRegra} (${regra.caminhoOrigem})`,
+            motivo: 'DOMINIO exige um código textual (VALOR_INVALIDO).',
+            severidade: 'ERRO',
+            alvo: { recurso, sentido, indiceRegra: idx, caminhoDestino: regra.caminhoDestino },
+          });
+          return;
         }
-        camposConvertidos++;
+
+        const dom = config.dominios.find((d) => d.nome === regra.parametroConversao);
+        if (!dom) {
+          erros.push({
+            local: `${localRegra} (${regra.caminhoDestino})`,
+            motivo: `A tabela "${regra.parametroConversao}" referenciada pela regra não foi configurada (DOMINIO_INEXISTENTE).`,
+            severidade: 'ERRO',
+            alvo: {
+              recurso,
+              sentido,
+              indiceRegra: idx,
+              caminhoDestino: regra.caminhoDestino,
+              nomeDominio: regra.parametroConversao,
+            },
+          });
+          return;
+        }
+
+        const traduzido = Object.prototype.hasOwnProperty.call(dom.equivalencia, bruto)
+          ? dom.equivalencia[bruto]
+          : undefined;
+
+        if (traduzido === undefined) {
+          erros.push({
+            local: `${localRegra} (${regra.caminhoOrigem} -> ${regra.caminhoDestino})`,
+            motivo: `O código de origem "${bruto}" não possui equivalência na tabela "${dom.nome}" (CODIGO_SEM_EQUIVALENCIA).`,
+            severidade: 'ERRO',
+            alvo: {
+              recurso,
+              sentido,
+              indiceRegra: idx,
+              caminhoDestino: regra.caminhoDestino,
+              nomeDominio: dom.nome,
+            },
+          });
+          return;
+        }
+
+        registrosSaida.push({ caminhoDestino: regra.caminhoDestino, valor: traduzido });
+      });
+
+      if (erros.length > 0) {
+        return {
+          acao: 'TESTAR',
+          sucesso: false,
+          timestamp: new Date().toISOString(),
+          mensagemResumo: 'Conversão simulada retornou erros.',
+          erros,
+          avisos: [AVISO_MOCK],
+        };
       }
 
-      if (camposConvertidos === 0 && erros.length === 0) {
-        erros.push({
-          local: `${recurso} > ${sentido}`,
-          motivo: 'Nenhum campo da entrada correspondeu às regras configuradas.',
-          severidade: 'ERRO',
-        });
+      const saidaRes = construirSaidaJson(registrosSaida);
+      if (!saidaRes.ok) {
+        return {
+          acao: 'TESTAR',
+          sucesso: false,
+          timestamp: new Date().toISOString(),
+          mensagemResumo: 'Falha ao construir JSON de destino.',
+          erros: [
+            {
+              local: `${recurso}.${listaNome} (${saidaRes.local})`,
+              motivo: saidaRes.motivo,
+              severidade: 'ERRO',
+              alvo: { recurso, sentido },
+            },
+          ],
+          avisos: [AVISO_MOCK],
+        };
       }
 
       return {
         acao: 'TESTAR',
-        sucesso: erros.length === 0,
+        sucesso: true,
         timestamp: new Date().toISOString(),
-        mensagemResumo:
-          erros.length === 0
-            ? 'Conversão simulada executada com sucesso.'
-            : 'Conversão simulada retornou erros.',
-        erros,
+        mensagemResumo: 'Conversão simulada executada com sucesso.',
+        erros: [],
         avisos: [AVISO_MOCK],
-        payloadSaida: erros.length === 0 ? saida : undefined,
+        payloadSaida: saidaRes.objeto,
       };
     },
 
     async salvarConfiguracao(config) {
       const validacao = validarConfiguracaoDesconhecida(config, FHIR_CATALOG);
-      if (!validacao.ok) {
+      if (!validacao.ok || !validacao.config) {
         return {
           acao: 'SALVAR',
           sucesso: false,
@@ -247,10 +439,12 @@ export function criarMockMappingApi(configPadrao: MapeamentoConfig): MappingGate
         };
       }
 
+      const canonica = serializarConfigParaContrato(validacao.config);
+
       // persiste ANTES de atualizar ativa em memória (fail-closed)
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(config));
-        ativa = structuredClone(config);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(canonica));
+        ativa = structuredClone(canonica);
       } catch {
         return {
           acao: 'SALVAR',
@@ -276,6 +470,7 @@ export function criarMockMappingApi(configPadrao: MapeamentoConfig): MappingGate
         mensagemResumo: 'Configuração salva no armazenamento local de demonstração.',
         erros: [],
         avisos: [...validacao.avisos, AVISO_MOCK],
+        configConfirmada: structuredClone(canonica),
       };
     },
   };

@@ -3,7 +3,8 @@ import type { MapeamentoConfig, RecursoFhir } from '../types/domain';
 import type { CampoFhirSpec, CampoLegado, ErroValidacao, TipoDadoCampo } from '../types/ui';
 import { validarConfiguracaoDesconhecida } from './configSchema';
 
-export const MAX_JSON_BYTES = 5 * 1024 * 1024; // 5 MB exatos (UC02 A2)
+export const MAX_JSON_BYTES = 5 * 1024 * 1024; // 5 MB exatos para JSON de exemplo (UC-02 A2)
+export const MAX_CONFIG_CHARS = 1_000_000; // 1.000.000 de caracteres conforme ConfigParser.java
 
 export interface ResultadoIngestao {
   sucesso: boolean;
@@ -26,6 +27,11 @@ function inferirTipo(valor: unknown): TipoDadoCampo {
   return typeof valor as TipoDadoCampo;
 }
 
+/**
+ * extrai caminhos folha de um JSON de exemplo usando a sintaxe suportada pelo motor:
+ * - caminho: Dot Notation com índice [0] quando houver arrays de objetos (ex.: identifier[0].value, numeroPedido)
+ * - caminhoJsonPath: subconjunto JSONPath iniciando com "$." (ex.: $.identifier[0].value, $.numeroPedido)
+ */
 export function extrairCamposSimples(
   obj: Record<string, unknown>,
   prefixo = '',
@@ -44,25 +50,29 @@ export function extrairCamposSimples(
     } else if (tipo === 'array') {
       const lista = valor as unknown[];
       if (lista.length > 0 && typeof lista[0] === 'object' && lista[0] !== null) {
-        avisos.push({
-          local: caminho,
-          motivo:
-            'Coleção detectada: apenas o primeiro elemento foi inspecionado (caminhos simples DT05).',
-          severidade: 'AVISO',
-        });
+        const caminhoIndexado = `${caminho}[0]`;
         campos.push(
-          ...extrairCamposSimples(lista[0] as Record<string, unknown>, caminho, avisos)
+          ...extrairCamposSimples(lista[0] as Record<string, unknown>, caminhoIndexado, avisos)
         );
+      } else if (lista.length > 0) {
+        const caminhoIndexado = `${caminho}[0]`;
+        campos.push({
+          caminho: caminhoIndexado,
+          caminhoJsonPath: `$.${caminhoIndexado}`,
+          valorExemplo: lista[0] === null ? 'null' : String(lista[0]),
+          tipo: inferirTipo(lista[0]),
+        });
       } else {
         avisos.push({
           local: caminho,
-          motivo: 'Lista primitiva ignorada: o motor suporta apenas caminhos simples.',
+          motivo: 'Array vazio no JSON de exemplo: nenhum índice [0] pôde ser inspecionado.',
           severidade: 'AVISO',
         });
       }
     } else {
       campos.push({
         caminho,
+        caminhoJsonPath: `$.${caminho}`,
         valorExemplo: valor === null ? 'null' : String(valor),
         tipo,
       });
@@ -147,7 +157,7 @@ export function validarEProcessarJsonTexto(
       erros: [
         {
           local: origemLabel,
-          motivo: 'Nenhum campo simples mapeável foi encontrado no JSON informado.',
+          motivo: 'Nenhum campo mapeável foi encontrado no JSON informado.',
           severidade: 'ERRO',
         },
       ],
@@ -214,7 +224,7 @@ export function lerArquivoJson(file: File): Promise<ResultadoIngestao> {
 /**
  * UC-04 (RF009, RF011, RF012, RF013):
  * importa arquivo de configuração MapeamentoConfig em JSON ou YAML (.json, .yaml, .yml)
- * e executa validação estrutural completa em tempo de execução (Zod).
+ * e executa validação estrutural e semântica completa em tempo de execução.
  */
 export async function importarArquivoConfig(
   file: File,
@@ -253,6 +263,20 @@ export async function importarArquivoConfig(
         {
           local: file.name,
           motivo: 'Não foi possível ler o arquivo de configuração.',
+          severidade: 'ERRO',
+        },
+      ],
+      avisos: [],
+    };
+  }
+
+  if (texto.length > MAX_CONFIG_CHARS) {
+    return {
+      sucesso: false,
+      erros: [
+        {
+          local: file.name,
+          motivo: `Conteúdo acima do limite de ${MAX_CONFIG_CHARS} caracteres (ConfigParser).`,
           severidade: 'ERRO',
         },
       ],

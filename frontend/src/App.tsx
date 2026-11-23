@@ -16,6 +16,7 @@ import {
   type RegraCampo,
   type SentidoTipo,
 } from './types/domain';
+import type { AlvoNavegacaoErro } from './types/ui';
 import { obterRegrasDoSentido } from './utils/mappingValidation';
 
 interface RegraEmEdicaoContexto {
@@ -37,17 +38,39 @@ export function App() {
     edicaoAtual &&
     edicaoAtual.recurso === ws.recursoAtual &&
     edicaoAtual.sentido === ws.sentidoAtual &&
-    regrasAtuais.some(
-      (r) =>
-        r.caminhoOrigem === edicaoAtual.regra.caminhoOrigem &&
-        r.caminhoDestino === edicaoAtual.regra.caminhoDestino
-    )
+    regrasAtuais.some((r) => r.caminhoDestino === edicaoAtual.regra.caminhoDestino)
       ? edicaoAtual.regra
       : null;
 
-  const tabelaDaRegra = regraEmEdicao?.regra.startsWith('TABELA:')
-    ? ws.draftConfig.tabelas.find((t) => t.nome === regraEmEdicao.regra.slice('TABELA:'.length))
-    : undefined;
+  const tabelaDaRegra =
+    regraEmEdicao?.tipoConversao === 'DOMINIO'
+      ? ws.draftConfig.dominios.find((d) => d.nome === regraEmEdicao.parametroConversao)
+      : undefined;
+
+  const handleLocalizarErro = (alvo: AlvoNavegacaoErro) => {
+    const recursoAlvo = alvo.recurso ?? ws.recursoAtual;
+    const sentidoAlvo = alvo.sentido ?? ws.sentidoAtual;
+    ws.navegarParaContexto(recursoAlvo, sentidoAlvo);
+    setAbaAtiva('CAMPOS');
+
+    const regrasAlvo = obterRegrasDoSentido(ws.draftConfig, recursoAlvo, sentidoAlvo);
+    const regraEncontrada =
+      alvo.indiceRegra !== undefined
+        ? regrasAlvo[alvo.indiceRegra]
+        : alvo.caminhoDestino
+        ? regrasAlvo.find((r) => r.caminhoDestino === alvo.caminhoDestino)
+        : undefined;
+
+    if (regraEncontrada) {
+      setEdicaoAtual({
+        recurso: recursoAlvo,
+        sentido: sentidoAlvo,
+        regra: regraEncontrada,
+      });
+    } else {
+      setEdicaoAtual(null);
+    }
+  };
 
   return (
     <AppShell>
@@ -96,7 +119,7 @@ export function App() {
               value={ws.recursoAtual}
               onChange={(e) => {
                 setEdicaoAtual(null);
-                ws.solicitarTrocaRecurso(e.target.value as RecursoFhir);
+                ws.selecionarRecursoPreservandoRascunho(e.target.value as RecursoFhir);
               }}
               className="border rounded px-2.5 py-1.5 text-xs bg-white font-semibold"
             >
@@ -174,7 +197,10 @@ export function App() {
       />
 
       <div ref={resultRef}>
-        <ResultCard resultado={ws.resultadoOperacao} />
+        <ResultCard
+          resultado={ws.resultadoOperacao}
+          onLocalizarErro={handleLocalizarErro}
+        />
       </div>
 
       <div className="border-b flex gap-4 text-xs font-semibold">
@@ -204,6 +230,7 @@ export function App() {
 
       {abaAtiva === 'CAMPOS' ? (
         <MappingCanvas
+          recurso={ws.recursoAtual}
           sentido={ws.sentidoAtual}
           camposLegado={ws.camposLegadoAtuais}
           camposFhir={FHIR_CATALOG[ws.recursoAtual] ?? []}
@@ -211,9 +238,10 @@ export function App() {
           onCriarConexao={(origem, destino, obrigatorio) =>
             ws.salvarRegraNoRascunho({
               regra: {
+                tipoConversao: 'DIRETA',
                 caminhoOrigem: origem,
                 caminhoDestino: destino,
-                regra: 'COPIAR',
+                parametroConversao: null,
                 obrigatorio,
               },
               aplicarInversa: false,
@@ -239,14 +267,23 @@ export function App() {
 
       {regraEmEdicao && (
         <RuleDrawer
-          key={`${ws.recursoAtual}:${ws.sentidoAtual}:${regraEmEdicao.caminhoOrigem}->${regraEmEdicao.caminhoDestino}:${regraEmEdicao.regra}`}
+          key={`${ws.recursoAtual}:${ws.sentidoAtual}:${
+            regraEmEdicao.tipoConversao === 'CONSTANTE'
+              ? 'CONST'
+              : regraEmEdicao.caminhoOrigem
+          }->${regraEmEdicao.caminhoDestino}:${regraEmEdicao.tipoConversao}:${
+            regraEmEdicao.parametroConversao ?? ''
+          }`}
           regra={regraEmEdicao}
+          sentido={ws.sentidoAtual}
+          configRascunho={ws.draftConfig}
           tabelaAtual={tabelaDaRegra}
           onAplicar={(params) => {
             const res = ws.salvarRegraNoRascunho(params);
             if (res.ok) setEdicaoAtual(null);
             return res;
           }}
+          onExcluirDominio={ws.excluirDominio}
           onRemover={() => {
             ws.removerConexao(regraEmEdicao.caminhoDestino);
             setEdicaoAtual(null);
