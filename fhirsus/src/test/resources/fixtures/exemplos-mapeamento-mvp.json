@@ -354,7 +354,7 @@
         "situacao": "DISPONIVEL",
         "tipo": "SORO",
         "referenciaPaciente": "Patient/pac-001",
-        "dataHoraColeta": "2026-01-15T09:30:00-03:00"
+        "dataHoraColeta": "20260115 093000"
       }
     },
     "variantes": [
