@@ -163,13 +163,13 @@ public class MotorConversaoAdapter implements ConversionEngine {
     }
 
     private MapeamentoConfig carregarConfiguracaoPadrao() {
-        try (InputStream is = getClass().getResourceAsStream("/mapeamento-mvp-sintetico.json")) {
+        try (InputStream is = getClass().getResourceAsStream("/mapeamento-p3-sintetico.json")) {
             if (is != null) {
                 MapeamentoConfig base = JSON_MAPPER.readValue(is, MapeamentoConfig.class);
                 return enriquecerConfiguracao(base);
             }
         } catch (Exception e) {
-            log.warn("[MOTOR ADAPTER] Não foi possível carregar /mapeamento-mvp-sintetico.json: {}", e.getMessage());
+            log.warn("[MOTOR ADAPTER] Não foi possível carregar /mapeamento-p3-sintetico.json: {}", e.getMessage());
         }
         return null;
     }
