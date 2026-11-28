@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.dashjoin.jsonata.Jsonata;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.node.ObjectNode;
 import tools.jackson.databind.node.StringNode;
@@ -14,7 +15,6 @@ import static br.ufs.fhirsus.map.FalhaConversao.Codigo.CONFIGURACAO_INVALIDA;
 import static br.ufs.fhirsus.map.FalhaConversao.Codigo.DOMINIO_INEXISTENTE;
 import static br.ufs.fhirsus.map.FalhaConversao.Codigo.ENTRADA_INVALIDA;
 import static br.ufs.fhirsus.map.FalhaConversao.Codigo.MAPEAMENTO_INEXISTENTE;
-import static br.ufs.fhirsus.map.FalhaConversao.Codigo.REGRA_NAO_SUPORTADA;
 import static br.ufs.fhirsus.map.FalhaConversao.Codigo.VALOR_INVALIDO;
 
 /** Transforma uma árvore JSON com as regras recebidas para um recurso e sentido. */
@@ -42,9 +42,10 @@ public final class MotorConversao {
                 throw new FalhaConversao(CONFIGURACAO_INVALIDA, destino.texto(),
                         "A regra deve informar obrigatorio e tipoConversao.");
             }
+            boolean obrigatorio = exigirValor(payload, regra);
             JsonNode valor = converterValor(payload, regra, dominios);
             if (semValor(valor)) {
-                if (regra.getObrigatorio()) {
+                if (obrigatorio) {
                     throw new FalhaConversao(CAMPO_OBRIGATORIO, destino.texto(),
                             "O campo obrigatório ficou sem valor.");
                 }
@@ -107,9 +108,67 @@ public final class MotorConversao {
                 }
                 yield StringNode.valueOf(parametro);
             }
-            case TRANSFORMACAO, EXPRESSAO -> throw new FalhaConversao(
-                    REGRA_NAO_SUPORTADA, regra.getCaminhoDestino(), "O tipo de conversão está fora do recorte P3.");
+            case TRANSFORMACAO -> converterTransformacao(payload, regra);
+            case EXPRESSAO -> converterExpressao(payload, regra);
         };
+    }
+
+    private boolean exigirValor(JsonNode payload, RegraCampo regra) {
+        if (!regra.getObrigatorio()) {
+            return false;
+        }
+        String condicao = regra.getCondicaoObrigatoriedade();
+        if (condicao == null) {
+            return true;
+        }
+        var expressao = compilarJsonata(condicao, regra.getCaminhoDestino(), "condicaoObrigatoriedade");
+        try {
+            JsonNode resultado = AvaliadorJsonata.avaliar(expressao, payload, null);
+            if (resultado == null || !resultado.isBoolean()) {
+                throw new IllegalArgumentException("A condição de obrigatoriedade deve retornar um booleano.");
+            }
+            return resultado.asBoolean();
+        } catch (IllegalArgumentException e) {
+            throw new FalhaConversao(VALOR_INVALIDO, regra.getCaminhoDestino(),
+                    "Falha na condição de obrigatoriedade. " + e.getMessage());
+        }
+    }
+
+    private JsonNode converterTransformacao(JsonNode payload, RegraCampo regra) {
+        String nome = regra.getParametroConversao();
+        if (!CatalogoTransformacoes.aceita(nome)) {
+            throw new FalhaConversao(CONFIGURACAO_INVALIDA, regra.getCaminhoDestino(),
+                    "O nome da transformação deve estar cadastrado no catálogo.");
+        }
+        CaminhoJson origem = CaminhoJson.origem(regra.getCaminhoOrigem());
+        JsonNode valor = origem.ler(payload);
+        if (semValor(valor)) {
+            return valor;
+        }
+        try {
+            return CatalogoTransformacoes.aplicar(nome, valor);
+        } catch (IllegalArgumentException e) {
+            throw new FalhaConversao(VALOR_INVALIDO, origem.texto(), e.getMessage());
+        }
+    }
+
+    private JsonNode converterExpressao(JsonNode payload, RegraCampo regra) {
+        var origem = CaminhoJson.origem(regra.getCaminhoOrigem());
+        var valor = origem.ler(payload);
+        var expressao = compilarJsonata(regra.getParametroConversao(), regra.getCaminhoDestino(), "parametroConversao");
+        try {
+            return AvaliadorJsonata.avaliar(expressao, payload, valor);
+        } catch (IllegalArgumentException e) {
+            throw new FalhaConversao(VALOR_INVALIDO, regra.getCaminhoDestino(), e.getMessage());
+        }
+    }
+
+    private Jsonata compilarJsonata(String fonte, String destino, String campo) {
+        try {
+            return AvaliadorJsonata.compilar(fonte);
+        } catch (IllegalArgumentException e) {
+            throw new FalhaConversao(CONFIGURACAO_INVALIDA, destino, "Campo " + campo + ". " + e.getMessage());
+        }
     }
 
     private JsonNode converterDominio(
@@ -131,12 +190,14 @@ public final class MotorConversao {
         if (!valor.isString()) {
             throw new FalhaConversao(VALOR_INVALIDO, origem.texto(), "DOMINIO exige um código textual.");
         }
-        String equivalente = dominio.equivalencia().get(valor.asString());
-        if (equivalente == null) {
-            throw new FalhaConversao(CODIGO_SEM_EQUIVALENCIA, origem.texto(),
-                    "O código de origem não possui equivalência na tabela.");
+        try {
+            return dominio.buscarEquivalente(valor.asString())
+                    .map(StringNode::valueOf)
+                    .orElseThrow(() -> new FalhaConversao(CODIGO_SEM_EQUIVALENCIA, origem.texto(),
+                            "O código de origem não possui equivalência na tabela."));
+        } catch (IllegalStateException e) {
+            throw new FalhaConversao(CONFIGURACAO_INVALIDA, origem.texto(), e.getMessage());
         }
-        return StringNode.valueOf(equivalente);
     }
 
     private boolean semValor(JsonNode valor) {
