@@ -136,7 +136,7 @@
           "caminhoOrigem": "$.birthDate",
           "caminhoDestino": "paciente.dataNascimento",
           "tipoConversao": "TRANSFORMACAO",
-          "parametroConversao": "iso_para_data",
+          "parametroConversao": "formatar_data(uuuu-MM-dd, dd/MM/uuuu)",
           "obrigatorio": false
         }
       ],
@@ -179,7 +179,7 @@
           "caminhoOrigem": "$.paciente.dataNascimento",
           "caminhoDestino": "birthDate",
           "tipoConversao": "TRANSFORMACAO",
-          "parametroConversao": "data_para_iso",
+          "parametroConversao": "formatar_data(dd/MM/uuuu, uuuu-MM-dd)",
           "obrigatorio": false
         }
       ]
@@ -533,8 +533,8 @@
         {
           "caminhoOrigem": "$.collection.collectedDateTime",
           "caminhoDestino": "amostra.dataHoraColeta",
-          "tipoConversao": "DIRETA",
-          "parametroConversao": null,
+          "tipoConversao": "TRANSFORMACAO",
+          "parametroConversao": "formatar_data(FHIR_DATE_TIME, uuuuMMdd HHmmss, zonaDestino=America/Fortaleza)",
           "obrigatorio": false
         }
       ],
@@ -576,8 +576,8 @@
         {
           "caminhoOrigem": "$.amostra.dataHoraColeta",
           "caminhoDestino": "collection.collectedDateTime",
-          "tipoConversao": "DIRETA",
-          "parametroConversao": null,
+          "tipoConversao": "TRANSFORMACAO",
+          "parametroConversao": "formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME, America/Fortaleza)",
           "obrigatorio": false
         },
         {

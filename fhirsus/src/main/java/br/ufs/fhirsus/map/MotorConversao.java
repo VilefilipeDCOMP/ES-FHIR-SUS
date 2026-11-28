@@ -3,6 +3,7 @@ package br.ufs.fhirsus.map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 
 import com.dashjoin.jsonata.Jsonata;
 import tools.jackson.databind.JsonNode;
@@ -135,10 +136,11 @@ public final class MotorConversao {
     }
 
     private JsonNode converterTransformacao(JsonNode payload, RegraCampo regra) {
-        String nome = regra.getParametroConversao();
-        if (!CatalogoTransformacoes.aceita(nome)) {
-            throw new FalhaConversao(CONFIGURACAO_INVALIDA, regra.getCaminhoDestino(),
-                    "O nome da transformação deve estar cadastrado no catálogo.");
+        UnaryOperator<JsonNode> transformacao;
+        try {
+            transformacao = CatalogoTransformacoes.resolver(regra.getParametroConversao());
+        } catch (IllegalArgumentException e) {
+            throw parametroInvalido(regra, e.getMessage());
         }
         CaminhoJson origem = CaminhoJson.origem(regra.getCaminhoOrigem());
         JsonNode valor = origem.ler(payload);
@@ -146,7 +148,7 @@ public final class MotorConversao {
             return valor;
         }
         try {
-            return CatalogoTransformacoes.aplicar(nome, valor);
+            return transformacao.apply(valor);
         } catch (IllegalArgumentException e) {
             throw new FalhaConversao(VALOR_INVALIDO, origem.texto(), e.getMessage());
         }

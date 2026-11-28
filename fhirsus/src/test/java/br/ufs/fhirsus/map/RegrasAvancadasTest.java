@@ -27,8 +27,28 @@ class RegrasAvancadasTest {
     @ParameterizedTest
     @CsvSource({
             "apenas_numeros, 00-12, 0012",
-            "data_para_iso, 29/02/2024, 2024-02-29",
-            "iso_para_data, 2024-02-29, 29/02/2024"
+            "'formatar_data(dd/MM/uuuu, uuuu-MM-dd)', 29/02/2024, 2024-02-29",
+            "'formatar_data(uuuu-MM-dd, dd/MM/uuuu)', 2024-02-29, 29/02/2024",
+            "'formatar_data(dd/MM/uuuu HH:mm:ssXXX, FHIR_DATE_TIME)', 29/02/2024 09:30:00-03:00, 2024-02-29T09:30:00-03:00",
+            "'formatar_data(FHIR_DATE_TIME, dd/MM/uuuu HH:mm:ssXXX)', 2024-02-29T09:30:00-03:00, 29/02/2024 09:30:00-03:00",
+            "'formatar_data(dd/MM/uuuu HH:mm:ss.SSSSSSSSSXXX, FHIR_DATE_TIME)', "
+                    + "01/03/2024 02:04:05.123456789+05:30, 2024-03-01T02:04:05.123456789+05:30",
+            "'formatar_data(FHIR_DATE_TIME, dd/MM/uuuu HH:mm:ss.SSSSSSSSSXXX)', "
+                    + "2024-03-01T02:04:05.123456789+05:30, 01/03/2024 02:04:05.123456789+05:30",
+            "'formatar_data(uuuuMMdd[ HHmmss], dd/MM/uuuu[ HH:mm:ssXXX], UTC)', 20260115, 15/01/2026",
+            "'formatar_data(uuuuMMdd[ HHmmss], dd/MM/uuuu[ HH:mm:ssXXX], UTC)', 20260115 093000, 15/01/2026 09:30:00Z",
+            "'formatar_data(uuuuMMdd, dd/MM/uuuu)', 20240229, 29/02/2024",
+            "'formatar_data(MM/dd/uuuu, uuuuMMdd)', 02/29/2024, 20240229",
+            "'formatar_data(uuuuMMdd, \"uuuu,MM(dd)\")', 20240229, '2024,02(29)'",
+            "'formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME, America/Fortaleza)', "
+                    + "20260115 093000, 2026-01-15T09:30:00-03:00",
+            "'formatar_data(FHIR_DATE_TIME, uuuuMMdd HHmmss, zonaDestino=America/Fortaleza)', "
+                    + "2026-01-15T02:30:00Z, 20260114 233000",
+            "'formatar_data(uuuuMMdd HHmmss.SSSXXX, FHIR_DATE_TIME, UTC)', "
+                    + "20260115 093000.125+05:30, 2026-01-15T09:30:00.125+05:30",
+            "'formatar_data(uuuuMMdd HHmmss, dd/MM/uuuu HH:mm:ss)', 20260115 093000, 15/01/2026 09:30:00",
+            "'formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME, zonaOrigem=America/Fortaleza, zonaDestino=UTC)', "
+                    + "20260115 093000, 2026-01-15T12:30:00Z"
     })
     void aplicaTransformacaoTextualDoCatalogo(String nome, String entrada, String esperado) {
         // Arrange
@@ -66,9 +86,20 @@ class RegrasAvancadasTest {
 
     @ParameterizedTest
     @CsvSource({
-            "data_para_iso, 31/02/2024",
-            "iso_para_data, 2023-02-29",
-            "para_decimal, '1.234,56'"
+            "'formatar_data(dd/MM/uuuu, uuuu-MM-dd)', 31/02/2024",
+            "'formatar_data(uuuu-MM-dd, dd/MM/uuuu)', 2023-02-29",
+            "'formatar_data(dd/MM/uuuu HH:mm:ssXXX, FHIR_DATE_TIME)', 31/02/2024 09:30:00-03:00",
+            "'formatar_data(uuuuMMdd, FHIR_DATE_TIME)', 20260115",
+            "'formatar_data(FHIR_DATE_TIME, dd/MM/uuuu HH:mm:ssXXX)', 2024-02-29T09:30:00.-03:00",
+            "'formatar_data(FHIR_DATE_TIME, dd/MM/uuuu HH:mm:ssXXX)', 2024-02-29T24:30:00-03:00",
+            "'formatar_data(FHIR_DATE_TIME, dd/MM/uuuu HH:mm:ssXXX)', 2024-02-29T09:30:00",
+            "'formatar_data(FHIR_DATE_TIME, dd/MM/uuuu HH:mm:ssXXX)', 2024-02-29T09:30Z",
+            "para_decimal, '1.234,56'",
+            "'formatar_data(uuuuMMdd, dd/MM/uuuu)', 20230229",
+            "'formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME)', 20260115 093000",
+            "'formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME, America/New_York)', 20240310 023000",
+            "'formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME, America/New_York)', 20241103 013000",
+            "'formatar_data(uuuuMMdd HHmmssXXX, FHIR_DATE_TIME)', 20260115 093000+15:00"
     })
     void rejeitaValorIncompativelComATransformacao(String nome, String entrada) {
         // Arrange
@@ -86,10 +117,19 @@ class RegrasAvancadasTest {
         assertEquals("$.origem", falha.getCaminho());
     }
 
-    @Test
-    void rejeitaNomeDesconhecidoMesmoComEntradaOpcionalAusente() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "inexistente",
+            "formatar_data(uuuuMMdd)",
+            "formatar_data(uuuuMMdd, dd/MM/uuuu,)",
+            "formatar_data(uuuuMMdd, \"dd/MM/uuuu)",
+            "formatar_data(uuuuMMdd, #)",
+            "formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME, America/Inexistente)",
+            "formatar_data(uuuuMMdd HHmmss, FHIR_DATE_TIME, UTC, zonaOrigem=UTC)"
+    })
+    void rejeitaConfiguracaoInvalidaMesmoComEntradaOpcionalAusente(String parametro) {
         // Arrange
-        var regra = new RegraCampo("$.origem", "saida", TRANSFORMACAO, "inexistente", false);
+        var regra = new RegraCampo("$.origem", "saida", TRANSFORMACAO, parametro, false);
         var configuracao = config(regra);
         var entrada = JSON.createObjectNode();
 

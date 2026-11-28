@@ -1,11 +1,8 @@
 package br.ufs.fhirsus.map;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import java.time.DateTimeException;
 import java.time.format.DateTimeParseException;
-import java.time.format.ResolverStyle;
-import java.util.Locale;
 import java.util.Map;
 import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
@@ -16,25 +13,42 @@ import tools.jackson.databind.node.StringNode;
 
 public final class CatalogoTransformacoes {
 
-    private static final DateTimeFormatter DATA_BR = DateTimeFormatter.ofPattern("dd/MM/uuuu", Locale.ROOT)
-            .withResolverStyle(ResolverStyle.STRICT);
-    private static final DateTimeFormatter DATA_ISO = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final Pattern DECIMAL = Pattern.compile("[+-]?[0-9]+(?:[.,][0-9]+)?");
     private static final Pattern SEM_DIGITOS = Pattern.compile("[^0-9]");
     private static final Map<String, UnaryOperator<JsonNode>> FUNCOES = Map.of(
             "apenas_numeros", valor -> StringNode.valueOf(SEM_DIGITOS.matcher(texto(valor)).replaceAll("")),
-            "para_decimal", CatalogoTransformacoes::paraDecimal,
-            "data_para_iso", valor -> converterData(valor, DATA_BR, DATA_ISO),
-            "iso_para_data", valor -> converterData(valor, DATA_ISO, DATA_BR));
+            "para_decimal", CatalogoTransformacoes::paraDecimal);
 
     private CatalogoTransformacoes() {}
 
     public static boolean aceita(String nome) {
-        return nome != null && FUNCOES.containsKey(nome);
+        try {
+            resolver(nome);
+            return true;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
-    static JsonNode aplicar(String nome, JsonNode valor) {
-        return FUNCOES.get(nome).apply(valor);
+    static UnaryOperator<JsonNode> resolver(String parametro) {
+        if (parametro == null) {
+            throw new IllegalArgumentException("Informe a transformação em parametroConversao.");
+        }
+        var funcao = FUNCOES.get(parametro);
+        if (funcao != null) {
+            return funcao;
+        }
+
+        var formatador = FormatacaoTemporal.compilar(parametro.strip());
+        return valor -> {
+            try {
+                return StringNode.valueOf(formatador.apply(texto(valor)));
+            } catch (DateTimeParseException e) {
+                throw new IllegalArgumentException("Valor incompatível com o formato de origem.", e);
+            } catch (DateTimeException e) {
+                throw new IllegalArgumentException(e.getMessage(), e);
+            }
+        };
     }
 
     private static String texto(JsonNode valor) {
@@ -53,15 +67,5 @@ public final class CatalogoTransformacoes {
             throw new IllegalArgumentException("Informe um decimal sem separador de milhares.");
         }
         return DecimalNode.valueOf(new BigDecimal(numero.replace(',', '.')));
-    }
-
-    private static JsonNode converterData(JsonNode valor, DateTimeFormatter origem, DateTimeFormatter destino) {
-        String data = texto(valor);
-        try {
-            LocalDate dia = LocalDate.parse(data, origem);
-            return StringNode.valueOf(dia.format(destino));
-        } catch (DateTimeParseException e) {
-            throw new IllegalArgumentException("Data inválida para o formato da transformação.");
-        }
     }
 }
