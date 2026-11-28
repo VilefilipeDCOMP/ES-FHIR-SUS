@@ -1,0 +1,677 @@
+{
+  "mapeamentos": [
+    {
+      "recurso": "ServiceRequest",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.identifier",
+          "caminhoDestino": "numeroPedido",
+          "tipoConversao": "EXPRESSAO",
+          "parametroConversao": "($ids := $valor[system = 'https://clinica.example/identificadores/pedidos']; $assert($count($ids) <= 1, 'Mais de um identificador do pedido no sistema da clínica'); $ids.value)",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.code.coding[0].code",
+          "caminhoDestino": "codigoExame",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "codigos_exames",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.status",
+          "caminhoDestino": "situacaoPedido",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_pedido",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.intent",
+          "caminhoDestino": "intencaoPedido",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.subject.reference",
+          "caminhoDestino": "referenciaPaciente",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoDestino": "origem",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "CLINICA_DEMO",
+          "obrigatorio": true
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "ServiceRequest",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.numeroPedido",
+          "caminhoDestino": "identifier[0].value",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.codigoExame",
+          "caminhoDestino": "code.coding[0].code",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "codigos_exames",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.situacaoPedido",
+          "caminhoDestino": "status",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_pedido",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.intencaoPedido",
+          "caminhoDestino": "intent",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.referenciaPaciente",
+          "caminhoDestino": "subject.reference",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoDestino": "identifier[0].system",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "https://clinica.example/identificadores/pedidos",
+          "obrigatorio": true
+        },
+        {
+          "caminhoDestino": "code.coding[0].system",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "http://loinc.org",
+          "obrigatorio": true
+        }
+      ]
+    },
+    {
+      "recurso": "Patient",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.id",
+          "caminhoDestino": "paciente.id",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.identifier[0].value",
+          "caminhoDestino": "paciente.identificador",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.name[0].text",
+          "caminhoDestino": "paciente.nome",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.gender",
+          "caminhoDestino": "paciente.sexo",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "sexo_administrativo",
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.birthDate",
+          "caminhoDestino": "paciente.dataNascimento",
+          "tipoConversao": "TRANSFORMACAO",
+          "parametroConversao": "iso_para_data",
+          "obrigatorio": false
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "Patient",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.paciente.id",
+          "caminhoDestino": "id",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.paciente.identificador",
+          "caminhoDestino": "identifier[0].value",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.paciente.nome",
+          "caminhoDestino": "name[0].text",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.paciente.sexo",
+          "caminhoDestino": "gender",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "sexo_administrativo",
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.paciente.dataNascimento",
+          "caminhoDestino": "birthDate",
+          "tipoConversao": "TRANSFORMACAO",
+          "parametroConversao": "data_para_iso",
+          "obrigatorio": false
+        }
+      ]
+    },
+    {
+      "recurso": "Practitioner",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.id",
+          "caminhoDestino": "profissional.id",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.identifier[0].value",
+          "caminhoDestino": "profissional.identificador",
+          "tipoConversao": "EXPRESSAO",
+          "parametroConversao": "$substring($valor, 0, 3) & '.' & $substring($valor, 3)",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.name[0].text",
+          "caminhoDestino": "profissional.nome",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "Practitioner",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.profissional.id",
+          "caminhoDestino": "id",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.profissional.identificador",
+          "caminhoDestino": "identifier[0].value",
+          "tipoConversao": "TRANSFORMACAO",
+          "parametroConversao": "apenas_numeros",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.profissional.nome",
+          "caminhoDestino": "name[0].text",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        }
+      ]
+    },
+    {
+      "recurso": "PractitionerRole",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.practitioner.reference",
+          "caminhoDestino": "vinculo.referenciaProfissional",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.organization.reference",
+          "caminhoDestino": "vinculo.referenciaOrganizacao",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.code[0].coding[0].code",
+          "caminhoDestino": "vinculo.funcao",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "funcoes_profissionais",
+          "obrigatorio": true
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "PractitionerRole",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.vinculo.referenciaProfissional",
+          "caminhoDestino": "practitioner.reference",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.vinculo.referenciaOrganizacao",
+          "caminhoDestino": "organization.reference",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.vinculo.funcao",
+          "caminhoDestino": "code[0].coding[0].code",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "funcoes_profissionais",
+          "obrigatorio": true
+        },
+        {
+          "caminhoDestino": "code[0].coding[0].system",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "http://terminology.hl7.org/CodeSystem/practitioner-role",
+          "obrigatorio": true
+        }
+      ]
+    },
+    {
+      "recurso": "Organization",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.id",
+          "caminhoDestino": "organizacao.id",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.identifier[0].value",
+          "caminhoDestino": "organizacao.identificador",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.name",
+          "caminhoDestino": "organizacao.nome",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "Organization",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.organizacao.id",
+          "caminhoDestino": "id",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.organizacao.identificador",
+          "caminhoDestino": "identifier[0].value",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.organizacao.nome",
+          "caminhoDestino": "name",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        }
+      ]
+    },
+    {
+      "recurso": "DiagnosticReport",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.identifier[0].value",
+          "caminhoDestino": "numero_protocolo_lab",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.status",
+          "caminhoDestino": "status_execucao",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_laudo",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.conclusion",
+          "caminhoDestino": "conclusao",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "DiagnosticReport",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.numero_protocolo_lab",
+          "caminhoDestino": "identifier[0].value",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.status_execucao",
+          "caminhoDestino": "status",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_laudo",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.conclusao",
+          "caminhoDestino": "conclusion",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoDestino": "code.coding[0].system",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "http://loinc.org",
+          "obrigatorio": true
+        },
+        {
+          "caminhoDestino": "code.coding[0].code",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "11502-2",
+          "obrigatorio": true
+        }
+      ]
+    },
+    {
+      "recurso": "Observation",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.code.coding[0].code",
+          "caminhoDestino": "codigoExame",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "codigos_exames",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.status",
+          "caminhoDestino": "situacao",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_resultado",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.valueQuantity.value",
+          "caminhoDestino": "resultado",
+          "tipoConversao": "EXPRESSAO",
+          "parametroConversao": "$exists($valor) ? $replace($string($valor), '.', ',') : null",
+          "obrigatorio": true,
+          "condicaoObrigatoriedade": "status = 'final'"
+        },
+        {
+          "caminhoOrigem": "$.valueQuantity.unit",
+          "caminhoDestino": "unidade",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "Observation",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.codigoExame",
+          "caminhoDestino": "code.coding[0].code",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "codigos_exames",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.situacao",
+          "caminhoDestino": "status",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_resultado",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.resultado",
+          "caminhoDestino": "valueQuantity.value",
+          "tipoConversao": "TRANSFORMACAO",
+          "parametroConversao": "para_decimal",
+          "obrigatorio": true,
+          "condicaoObrigatoriedade": "situacao = 'LIBERADO'"
+        },
+        {
+          "caminhoOrigem": "$.unidade",
+          "caminhoDestino": "valueQuantity.unit",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoDestino": "code.coding[0].system",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "http://loinc.org",
+          "obrigatorio": true
+        }
+      ]
+    },
+    {
+      "recurso": "Specimen",
+      "toLegado": [
+        {
+          "caminhoOrigem": "$.identifier[0].value",
+          "caminhoDestino": "amostra.identificador",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.status",
+          "caminhoDestino": "amostra.situacao",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_amostra",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.type.coding[0].code",
+          "caminhoDestino": "amostra.tipo",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "tipos_amostra",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.subject.reference",
+          "caminhoDestino": "amostra.referenciaPaciente",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.collection.collectedDateTime",
+          "caminhoDestino": "amostra.dataHoraColeta",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        }
+      ],
+      "toFHIR": [
+        {
+          "caminhoDestino": "resourceType",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "Specimen",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.amostra.identificador",
+          "caminhoDestino": "identifier[0].value",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.amostra.situacao",
+          "caminhoDestino": "status",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "status_amostra",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.amostra.tipo",
+          "caminhoDestino": "type.coding[0].code",
+          "tipoConversao": "DOMINIO",
+          "parametroConversao": "tipos_amostra",
+          "obrigatorio": true
+        },
+        {
+          "caminhoOrigem": "$.amostra.referenciaPaciente",
+          "caminhoDestino": "subject.reference",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoOrigem": "$.amostra.dataHoraColeta",
+          "caminhoDestino": "collection.collectedDateTime",
+          "tipoConversao": "DIRETA",
+          "parametroConversao": null,
+          "obrigatorio": false
+        },
+        {
+          "caminhoDestino": "type.coding[0].system",
+          "tipoConversao": "CONSTANTE",
+          "parametroConversao": "http://terminology.hl7.org/CodeSystem/v2-0487",
+          "obrigatorio": true
+        }
+      ]
+    }
+  ],
+  "dominios": [
+    {
+      "nome": "codigos_exames",
+      "equivalencia": {
+        "LAB-042": "2345-7",
+        "LAB-043": "2093-3"
+      }
+    },
+    {
+      "nome": "status_pedido",
+      "equivalencia": {
+        "RASCUNHO": "draft",
+        "SOLICITADO": "active",
+        "SUSPENSO": "on-hold",
+        "CANCELADO": "revoked",
+        "CONCLUIDO": "completed",
+        "CADASTRO_INDEVIDO": "entered-in-error",
+        "DESCONHECIDO": "unknown"
+      }
+    },
+    {
+      "nome": "sexo_administrativo",
+      "equivalencia": {
+        "M": "male",
+        "F": "female",
+        "O": "other",
+        "I": "unknown"
+      }
+    },
+    {
+      "nome": "funcoes_profissionais",
+      "equivalencia": {
+        "MEDICO": "doctor",
+        "ENFERMEIRO": "nurse",
+        "FARMACEUTICO": "pharmacist"
+      }
+    },
+    {
+      "nome": "status_laudo",
+      "equivalencia": {
+        "REGISTRADO": "registered",
+        "PARCIAL": "partial",
+        "PRELIMINAR": "preliminary",
+        "CONCLUIDO": "final",
+        "ALTERADO": "amended",
+        "RETIFICADO": "corrected",
+        "COMPLEMENTADO": "appended",
+        "CANCELADO": "cancelled",
+        "CADASTRO_INDEVIDO": "entered-in-error",
+        "DESCONHECIDO": "unknown"
+      }
+    },
+    {
+      "nome": "status_resultado",
+      "equivalencia": {
+        "REGISTRADO": "registered",
+        "PARCIAL": "preliminary",
+        "LIBERADO": "final",
+        "ALTERADO": "amended",
+        "RETIFICADO": "corrected",
+        "CANCELADO": "cancelled",
+        "CADASTRO_INDEVIDO": "entered-in-error",
+        "DESCONHECIDO": "unknown"
+      }
+    },
+    {
+      "nome": "status_amostra",
+      "equivalencia": {
+        "DISPONIVEL": "available",
+        "INDISPONIVEL": "unavailable",
+        "INADEQUADA": "unsatisfactory",
+        "CADASTRO_INDEVIDO": "entered-in-error"
+      }
+    },
+    {
+      "nome": "tipos_amostra",
+      "equivalencia": {
+        "SORO": "SER",
+        "PLASMA": "PLAS",
+        "SANGUE_TOTAL": "BLD",
+        "URINA": "UR",
+        "SALIVA": "SAL"
+      }
+    }
+  ]
+}
