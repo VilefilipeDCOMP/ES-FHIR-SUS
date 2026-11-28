@@ -1,0 +1,417 @@
+{
+  "ServiceRequest": {
+    "fhir": {
+      "resourceType": "ServiceRequest",
+      "identifier": [
+        {
+          "system": "https://clinica.example/identificadores/pedidos",
+          "value": "PED-001"
+        }
+      ],
+      "status": "active",
+      "intent": "order",
+      "code": {
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "2345-7"
+          }
+        ]
+      },
+      "subject": {
+        "reference": "Patient/pac-001"
+      }
+    },
+    "legado": {
+      "numeroPedido": "PED-001",
+      "codigoExame": "LAB-042",
+      "situacaoPedido": "SOLICITADO",
+      "intencaoPedido": "order",
+      "referenciaPaciente": "Patient/pac-001",
+      "origem": "CLINICA_DEMO"
+    },
+    "variantes": [
+      {
+        "cenario": "Pedido suspenso",
+        "fhir": {
+          "resourceType": "ServiceRequest",
+          "identifier": [
+            {
+              "system": "https://clinica.example/identificadores/pedidos",
+              "value": "PED-002"
+            }
+          ],
+          "status": "on-hold",
+          "intent": "order",
+          "code": {
+            "coding": [
+              {
+                "system": "http://loinc.org",
+                "code": "2093-3"
+              }
+            ]
+          },
+          "subject": {
+            "reference": "Patient/pac-001"
+          }
+        },
+        "legado": {
+          "numeroPedido": "PED-002",
+          "codigoExame": "LAB-043",
+          "situacaoPedido": "SUSPENSO",
+          "intencaoPedido": "order",
+          "referenciaPaciente": "Patient/pac-001",
+          "origem": "CLINICA_DEMO"
+        }
+      }
+    ]
+  },
+  "Patient": {
+    "fhir": {
+      "resourceType": "Patient",
+      "id": "pac-001",
+      "identifier": [
+        {
+          "value": "PAC-001"
+        }
+      ],
+      "name": [
+        {
+          "text": "Paciente Exemplo"
+        }
+      ],
+      "gender": "female",
+      "birthDate": "1990-01-15"
+    },
+    "legado": {
+      "paciente": {
+        "id": "pac-001",
+        "identificador": "PAC-001",
+        "nome": "Paciente Exemplo",
+        "sexo": "F",
+        "dataNascimento": "15/01/1990"
+      }
+    }
+  },
+  "Practitioner": {
+    "fhir": {
+      "resourceType": "Practitioner",
+      "id": "prof-001",
+      "identifier": [
+        {
+          "value": "001024"
+        }
+      ],
+      "name": [
+        {
+          "text": "Profissional Exemplo"
+        }
+      ]
+    },
+    "legado": {
+      "profissional": {
+        "id": "prof-001",
+        "identificador": "001.024",
+        "nome": "Profissional Exemplo"
+      }
+    }
+  },
+  "PractitionerRole": {
+    "fhir": {
+      "resourceType": "PractitionerRole",
+      "practitioner": {
+        "reference": "Practitioner/prof-001"
+      },
+      "organization": {
+        "reference": "Organization/org-001"
+      },
+      "code": [
+        {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/practitioner-role",
+              "code": "doctor"
+            }
+          ]
+        }
+      ]
+    },
+    "legado": {
+      "vinculo": {
+        "referenciaProfissional": "Practitioner/prof-001",
+        "referenciaOrganizacao": "Organization/org-001",
+        "funcao": "MEDICO"
+      }
+    },
+    "variantes": [
+      {
+        "cenario": "Vínculo de farmacêutico",
+        "fhir": {
+          "resourceType": "PractitionerRole",
+          "practitioner": {
+            "reference": "Practitioner/prof-002"
+          },
+          "organization": {
+            "reference": "Organization/org-001"
+          },
+          "code": [
+            {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/practitioner-role",
+                  "code": "pharmacist"
+                }
+              ]
+            }
+          ]
+        },
+        "legado": {
+          "vinculo": {
+            "referenciaProfissional": "Practitioner/prof-002",
+            "referenciaOrganizacao": "Organization/org-001",
+            "funcao": "FARMACEUTICO"
+          }
+        }
+      }
+    ]
+  },
+  "Organization": {
+    "fhir": {
+      "resourceType": "Organization",
+      "id": "org-001",
+      "identifier": [
+        {
+          "value": "ORG-001"
+        }
+      ],
+      "name": "Clínica Exemplo"
+    },
+    "legado": {
+      "organizacao": {
+        "id": "org-001",
+        "identificador": "ORG-001",
+        "nome": "Clínica Exemplo"
+      }
+    }
+  },
+  "DiagnosticReport": {
+    "fhir": {
+      "resourceType": "DiagnosticReport",
+      "identifier": [
+        {
+          "value": "LAB-PROT-001"
+        }
+      ],
+      "status": "final",
+      "code": {
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "11502-2"
+          }
+        ]
+      },
+      "conclusion": "Laudo sintético de demonstração."
+    },
+    "legado": {
+      "numero_protocolo_lab": "LAB-PROT-001",
+      "status_execucao": "CONCLUIDO",
+      "conclusao": "Laudo sintético de demonstração."
+    },
+    "variantes": [
+      {
+        "cenario": "Laudo parcial",
+        "fhir": {
+          "resourceType": "DiagnosticReport",
+          "identifier": [
+            {
+              "value": "LAB-PROT-002"
+            }
+          ],
+          "status": "partial",
+          "code": {
+            "coding": [
+              {
+                "system": "http://loinc.org",
+                "code": "11502-2"
+              }
+            ]
+          },
+          "conclusion": "Laudo sintético com resultados em verificação."
+        },
+        "legado": {
+          "numero_protocolo_lab": "LAB-PROT-002",
+          "status_execucao": "PARCIAL",
+          "conclusao": "Laudo sintético com resultados em verificação."
+        }
+      },
+      {
+        "cenario": "Laudo preliminar",
+        "fhir": {
+          "resourceType": "DiagnosticReport",
+          "identifier": [
+            {
+              "value": "LAB-PROT-003"
+            }
+          ],
+          "status": "preliminary",
+          "code": {
+            "coding": [
+              {
+                "system": "http://loinc.org",
+                "code": "11502-2"
+              }
+            ]
+          },
+          "conclusion": "Resultados iniciais verificados."
+        },
+        "legado": {
+          "numero_protocolo_lab": "LAB-PROT-003",
+          "status_execucao": "PRELIMINAR",
+          "conclusao": "Resultados iniciais verificados."
+        }
+      }
+    ]
+  },
+  "Observation": {
+    "fhir": {
+      "resourceType": "Observation",
+      "status": "final",
+      "code": {
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "2345-7"
+          }
+        ]
+      },
+      "valueQuantity": {
+        "value": 92.4,
+        "unit": "mg/dL"
+      }
+    },
+    "legado": {
+      "codigoExame": "LAB-042",
+      "situacao": "LIBERADO",
+      "resultado": "92,4",
+      "unidade": "mg/dL"
+    },
+    "variantes": [
+      {
+        "cenario": "Resultado retificado",
+        "fhir": {
+          "resourceType": "Observation",
+          "status": "corrected",
+          "code": {
+            "coding": [
+              {
+                "system": "http://loinc.org",
+                "code": "2345-7"
+              }
+            ]
+          },
+          "valueQuantity": {
+            "value": 94.2,
+            "unit": "mg/dL"
+          }
+        },
+        "legado": {
+          "codigoExame": "LAB-042",
+          "situacao": "RETIFICADO",
+          "resultado": "94,2",
+          "unidade": "mg/dL"
+        }
+      }
+    ]
+  },
+  "Specimen": {
+    "fhir": {
+      "resourceType": "Specimen",
+      "identifier": [
+        {
+          "value": "AM-001"
+        }
+      ],
+      "status": "available",
+      "type": {
+        "coding": [
+          {
+            "system": "http://terminology.hl7.org/CodeSystem/v2-0487",
+            "code": "SER"
+          }
+        ]
+      },
+      "subject": {
+        "reference": "Patient/pac-001"
+      },
+      "collection": {
+        "collectedDateTime": "2026-01-15T09:30:00-03:00"
+      }
+    },
+    "legado": {
+      "amostra": {
+        "identificador": "AM-001",
+        "situacao": "DISPONIVEL",
+        "tipo": "SORO",
+        "referenciaPaciente": "Patient/pac-001",
+        "dataHoraColeta": "2026-01-15T09:30:00-03:00"
+      }
+    },
+    "variantes": [
+      {
+        "cenario": "Amostra de urina inadequada",
+        "fhir": {
+          "resourceType": "Specimen",
+          "identifier": [
+            {
+              "value": "AM-002"
+            }
+          ],
+          "status": "unsatisfactory",
+          "type": {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0487",
+                "code": "UR"
+              }
+            ]
+          }
+        },
+        "legado": {
+          "amostra": {
+            "identificador": "AM-002",
+            "situacao": "INADEQUADA",
+            "tipo": "URINA"
+          }
+        }
+      },
+      {
+        "cenario": "Amostra de sangue total disponível",
+        "fhir": {
+          "resourceType": "Specimen",
+          "identifier": [
+            {
+              "value": "AM-003"
+            }
+          ],
+          "status": "available",
+          "type": {
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/v2-0487",
+                "code": "BLD"
+              }
+            ]
+          }
+        },
+        "legado": {
+          "amostra": {
+            "identificador": "AM-003",
+            "situacao": "DISPONIVEL",
+            "tipo": "SANGUE_TOTAL"
+          }
+        }
+      }
+    ]
+  }
+}
