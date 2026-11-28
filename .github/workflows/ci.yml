@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 defaults:
   run:
     shell: bash
@@ -18,65 +22,95 @@ jobs:
   structure:
     name: Estrutura do repositório
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     outputs:
       backends: ${{ steps.modules.outputs.backends }}
-      frontend_scripts: ${{ steps.frontend.outputs.scripts }}
+      frontend_test_script: ${{ steps.frontend.outputs.test_script }}
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Verificar estrutura e localizar módulos
+      - name: Verificar módulos obrigatórios do backend
         id: modules
         run: |
-          git ls-tree --name-only HEAD
+          if [[ ! -f fhirsus/pom.xml ]]; then
+            echo "::error::Módulo obrigatório ausente: fhirsus/pom.xml não encontrado."
+            exit 1
+          fi
 
-          backends=()
-          for module in fhirsus backend; do
-            if [[ -f "$module/pom.xml" ]]; then
-              backends+=("$module")
-              echo "Backend ($module): POM encontrado."
-            else
-              echo "::notice::Backend ($module): job ignorado. $module/pom.xml ausente, módulo não testado."
-            fi
-          done
+          backends=(fhirsus)
+          if [[ -f backend/pom.xml ]]; then
+            backends+=(backend)
+          fi
+
           backend_matrix=$(jq -cn --args '$ARGS.positional' "${backends[@]}")
           echo "backends=$backend_matrix" >> "$GITHUB_OUTPUT"
+          echo "Módulos backend detectados: $backend_matrix"
 
-      - name: Localizar scripts do frontend
+      - name: Verificar lockfile e scripts do frontend
         id: frontend
         run: |
           if [[ ! -f frontend/package.json ]]; then
-            echo "::notice::Frontend: job ignorado. frontend/package.json ausente, módulo não testado."
-            echo 'scripts=[]' >> "$GITHUB_OUTPUT"
-            exit 0
+            echo "::error::Módulo obrigatório ausente: frontend/package.json não encontrado."
+            exit 1
           fi
 
-          scripts=$(jq -ces '
-            if length == 1 and (.[0] | type) == "object" then .[0].scripts
-            else error("package.json deve conter um objeto JSON")
+          lockfile=frontend/package-lock.json
+          if [[ -f frontend/npm-shrinkwrap.json ]]; then
+            lockfile=frontend/npm-shrinkwrap.json
+          fi
+          if [[ ! -f "$lockfile" ]] || ! git ls-files --error-unmatch -- "$lockfile" >/dev/null 2>&1; then
+            echo "::error::O frontend precisa de um package-lock.json ou npm-shrinkwrap.json versionado."
+            exit 1
+          fi
+
+          scripts_json=$(jq -ce '
+            if type == "object" and (.scripts | type) == "object" then .scripts
+            else error("frontend/package.json deve conter um objeto scripts válido")
             end
-            | . as $scripts
-            | ["lint", "test", "build"]
-            | map(select($scripts[.] | strings | test("\\S")))
           ' frontend/package.json)
-          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
 
-          if [[ "$scripts" == '[]' ]]; then
-            echo "::notice::Frontend: job ignorado. Módulo não testado, sem scripts lint, test ou build."
-          else
-            for script in lint test build; do
-              if [[ "$scripts" != *\""$script"\"* ]]; then
-                echo "::notice::Frontend: etapa $script ignorada. Script ausente em package.json."
-              fi
-            done
+          for required in typecheck lint build; do
+            cmd=$(jq -r --arg name "$required" '.[$name] // ""' <<< "$scripts_json")
+            if [[ -z "${cmd// }" ]]; then
+              echo "::error::Script obrigatório ausente ou vazio em frontend/package.json: $required"
+              exit 1
+            fi
+          done
+
+          test_script="test:ci"
+          test_cmd=$(jq -r '.["test:ci"] // ""' <<< "$scripts_json")
+          if [[ -z "${test_cmd// }" ]]; then
+            test_script="test"
+            test_cmd=$(jq -r '.test // ""' <<< "$scripts_json")
           fi
+
+          if [[ -z "${test_cmd// }" ]]; then
+            echo "::error::Script obrigatório ausente ou vazio em frontend/package.json: test:ci ou test"
+            exit 1
+          fi
+
+          if grep -Eq '(^|[[:space:]])--watch($|[[:space:]])' <<< "$test_cmd" || { grep -Eq '(^|[[:space:]])vitest($|[[:space:]])' <<< "$test_cmd" && ! grep -Eq '(^|[[:space:]])(run|--run)($|[[:space:]])' <<< "$test_cmd"; }; then
+            echo "::error::O script '$test_script' do frontend não pode rodar em modo watch na CI: $test_cmd"
+            exit 1
+          fi
+
+          echo "test_script=$test_script" >> "$GITHUB_OUTPUT"
+          echo "Script de teste selecionado: $test_script ($test_cmd)"
+
+          {
+            echo "### Estrutura validada"
+            echo ""
+            echo "- Backend: \`${{ steps.modules.outputs.backends }}\`"
+            echo "- Frontend: \`typecheck\`, \`lint\`, \`$test_script\`, \`build\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
   backend:
     name: Backend (${{ matrix.module }})
     needs: structure
-    if: needs.structure.outputs.backends != '[]'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -90,16 +124,70 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: maven
 
       - name: Compilar e testar com Maven
+        id: maven
         working-directory: ${{ matrix.module }}
         run: mvn --batch-mode --no-transfer-progress verify
+
+      - name: Publicar resumo e validar contagem de testes
+        if: always()
+        working-directory: ${{ matrix.module }}
+        env:
+          MAVEN_OUTCOME: ${{ steps.maven.outcome }}
+        run: |
+          python3 - << 'PY'
+          import glob
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          reports = sorted(glob.glob("target/surefire-reports/TEST-*.xml"))
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          maven_outcome = os.environ.get("MAVEN_OUTCOME", "unknown")
+
+          total = failures = errors = skipped = 0
+          failed_cases = []
+
+          for path in reports:
+              root = ET.parse(path).getroot()
+              total += int(root.attrib.get("tests", 0))
+              failures += int(root.attrib.get("failures", 0))
+              errors += int(root.attrib.get("errors", 0))
+              skipped += int(root.attrib.get("skipped", 0))
+              for tc in root.findall("testcase"):
+                  issue = tc.find("failure")
+                  if issue is None:
+                      issue = tc.find("error")
+                  if issue is not None:
+                      msg = (issue.attrib.get("message") or "").strip().splitlines()[0:1]
+                      detail = msg[0] if msg else issue.tag
+                      failed_cases.append(f"- `{tc.attrib.get('classname')}.{tc.attrib.get('name')}`: {detail}")
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as fh:
+                  fh.write("### Backend (${{ matrix.module }})\n\n")
+                  if not reports:
+                      fh.write(f"- Status Maven: `{maven_outcome}` (nenhum relatório Surefire gerado)\n")
+                  else:
+                      fh.write("| Executados | Falhas | Erros | Ignorados |\n")
+                      fh.write("|---:|---:|---:|---:|\n")
+                      fh.write(f"| {total} | {failures} | {errors} | {skipped} |\n")
+                      if failed_cases:
+                          fh.write("\n**Casos com falha:**\n")
+                          fh.write("\n".join(failed_cases[:20]) + "\n")
+
+          if maven_outcome == "success" and total == 0:
+              print("::error::Nenhum teste Maven foi executado em ${{ matrix.module }}.", file=sys.stderr)
+              sys.exit(1)
+          PY
 
   frontend:
     name: Frontend
     needs: structure
-    if: needs.structure.outputs.frontend_scripts != '[]'
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
@@ -114,28 +202,77 @@ jobs:
           package-manager-cache: false
 
       - name: Instalar dependências com npm ci
-        run: |
-          lockfile=package-lock.json
-          if [[ -f npm-shrinkwrap.json ]]; then
-            lockfile=npm-shrinkwrap.json
-          fi
-          if [[ ! -f "$lockfile" ]] || ! git ls-files --error-unmatch -- "$lockfile" >/dev/null 2>&1; then
-            echo "::error::O frontend precisa de um package-lock.json ou npm-shrinkwrap.json versionado."
-            exit 1
-          fi
-          npm ci
+        run: npm ci
+
+      - name: Typecheck
+        id: typecheck
+        run: npm run typecheck
 
       - name: Lint
-        if: contains(fromJSON(needs.structure.outputs.frontend_scripts), 'lint')
+        id: lint
         run: npm run lint
 
-      - name: Testes
-        if: contains(fromJSON(needs.structure.outputs.frontend_scripts), 'test')
+      - name: Testes (sem watch)
+        id: test
         env:
           CI: 'true'
-        timeout-minutes: 10
-        run: npm run test < /dev/null
+        run: npm run "${{ needs.structure.outputs.frontend_test_script }}" -- --reporter=default --reporter=junit --outputFile=test-results/junit.xml < /dev/null
 
       - name: Build
-        if: contains(fromJSON(needs.structure.outputs.frontend_scripts), 'build')
+        id: build
         run: npm run build
+
+      - name: Publicar resumo do Frontend
+        if: always()
+        env:
+          TYPECHECK_OUTCOME: ${{ steps.typecheck.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          TEST_OUTCOME: ${{ steps.test.outcome }}
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+        run: |
+          python3 - << 'PY'
+          import os
+          import sys
+          import xml.etree.ElementTree as ET
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          junit_path = "test-results/junit.xml"
+          total = failures = errors = skipped = 0
+          failed_cases = []
+
+          if os.path.exists(junit_path):
+              root = ET.parse(junit_path).getroot()
+              suites = [root] if root.tag == "testsuite" else root.findall("testsuite")
+              for suite in suites:
+                  total += int(suite.attrib.get("tests", 0))
+                  failures += int(suite.attrib.get("failures", 0))
+                  errors += int(suite.attrib.get("errors", 0))
+                  skipped += int(suite.attrib.get("skipped", 0))
+                  for tc in suite.findall("testcase"):
+                      issue = tc.find("failure")
+                      if issue is None:
+                          issue = tc.find("error")
+                      if issue is not None:
+                          msg = (issue.attrib.get("message") or "").strip().splitlines()[0:1]
+                          detail = msg[0] if msg else issue.tag
+                          failed_cases.append(f"- `{tc.attrib.get('name')}`: {detail}")
+
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as fh:
+                  fh.write("### Frontend (Node 24)\n\n")
+                  fh.write(
+                      f"- Typecheck: `{os.environ['TYPECHECK_OUTCOME']}` | "
+                      f"Lint: `{os.environ['LINT_OUTCOME']}` | "
+                      f"Testes: `{os.environ['TEST_OUTCOME']}` | "
+                      f"Build: `{os.environ['BUILD_OUTCOME']}`\n"
+                  )
+                  if os.path.exists(junit_path):
+                      fh.write(f"- Vitest: {total} executados, {failures} falhas, {errors} erros, {skipped} ignorados\n")
+                  if failed_cases:
+                      fh.write("\n**Testes com falha:**\n")
+                      fh.write("\n".join(failed_cases[:20]) + "\n")
+
+          if os.environ["TEST_OUTCOME"] == "success" and total == 0:
+              print("::error::Nenhum teste Vitest foi executado.", file=sys.stderr)
+              sys.exit(1)
+          PY

@@ -48,6 +48,10 @@ describe('Integração de Workspace (App.tsx)', () => {
   it('permite alternar abas entre Mapeamento e Prévia JSON', async () => {
     render(<App />);
 
+    await waitFor(() => {
+      expect(screen.getByText(/3 conexões ativas/i)).toBeInTheDocument();
+    });
+
     const abaPrevia = screen.getByRole('button', { name: /Prévia JSON/i });
     fireEvent.click(abaPrevia);
 
@@ -65,6 +69,10 @@ describe('Integração de Workspace (App.tsx)', () => {
 
   it('abre o modal de carregar JSON e permite selecionar exemplo', async () => {
     render(<App />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/3 conexões ativas/i)).toBeInTheDocument();
+    });
 
     const botaoCarregar = screen.getByRole('button', { name: /Carregar JSON/i });
     fireEvent.click(botaoCarregar);

@@ -11,7 +11,8 @@ permissions:
 jobs:
   validate-branch-flow:
     name: Validar origem e destino
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
 
     steps:
       - name: Conferir branches do pull request
@@ -23,10 +24,22 @@ jobs:
         shell: bash
         run: |
           if [[ "$BASE" == "dev" && "$HEAD" == feature/* ]]; then
-            echo "Fluxo permitido: feature/* -> dev"
+            msg="Fluxo permitido: \`feature/* -> dev\` (\`$HEAD_REPO:$HEAD -> $BASE_REPO:$BASE\`)"
+            echo "$msg"
+            echo "### Fluxo de branches válido" >> "$GITHUB_STEP_SUMMARY"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
           elif [[ "$BASE" == "main" && "$HEAD" == "dev" && "$HEAD_REPO" == "$BASE_REPO" ]]; then
-            echo "Fluxo permitido: dev -> main"
+            msg="Fluxo permitido: \`dev -> main\` (\`$HEAD_REPO:$HEAD -> $BASE_REPO:$BASE\`)"
+            echo "$msg"
+            echo "### Fluxo de branches válido" >> "$GITHUB_STEP_SUMMARY"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "::error::Fluxo não permitido: $HEAD_REPO:$HEAD -> $BASE_REPO:$BASE"
+            {
+              echo "### Fluxo de branches não permitido"
+              echo ""
+              echo "- Recebido: \`$HEAD_REPO:$HEAD -> $BASE_REPO:$BASE\`"
+              echo "- Permitidos: \`feature/* -> dev\` e \`dev -> main\` (no mesmo repositório)"
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "::error::Fluxo não permitido: $HEAD_REPO:$HEAD -> $BASE_REPO:$BASE. Permitidos: feature/* -> dev e dev -> main (mesmo repositório)."
             exit 1
           fi

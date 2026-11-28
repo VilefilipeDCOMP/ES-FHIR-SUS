@@ -11,7 +11,7 @@ Este módulo implementa a interface do usuário para mapeamento bidirecional de 
 - **Recursos FHIR R4:** 8 recursos oficiais (`ServiceRequest`, `DiagnosticReport`, `Observation`, `Patient`, etc.).
 
 ## Requisitos
-- Node.js 20+
+- Node.js 24 LTS (referência da CI, arquivo `.nvmrc`; compatível com `>=20.19.0 <25.0.0`, pois Node 25+ exige `--localstorage-file` para o Web Storage nos testes)
 - npm 10+
 
 ## Execução Local
@@ -20,10 +20,10 @@ Este módulo implementa a interface do usuário para mapeamento bidirecional de 
 # Entrar na pasta do front-end
 cd frontend
 
-# Instalar dependências
-npm install
+# Instalar dependências com lockfile
+npm ci
 
-# Iniciar servidor de desenvolvimento (porta 5173 com mock ativo)
+# Iniciar servidor de desenvolvimento (porta 5173; usa API HTTP por padrão conforme .env, ou VITE_USE_MOCK_API=true para mock)
 npm run dev
 
 # Checagem estrita de tipos TypeScript (tsc -b)
@@ -32,11 +32,14 @@ npm run typecheck
 # Análise estática de código (ESLint)
 npm run lint
 
-# Execução da suíte de testes (Vitest)
+# Execução da suíte de testes sem watch (Vitest)
 npm run test:ci
 
 # Build de produção
 npm run build
+
+# Verificação completa em sequência (typecheck + lint + test:ci + build)
+npm run check
 ```
 
 ## Arquitetura de Comunicação e Mock Fail-Closed
